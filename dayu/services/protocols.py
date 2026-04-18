@@ -10,16 +10,27 @@ from dayu.services.contracts import (
     ChatResumeRequest,
     ChatTurnRequest,
     ChatTurnSubmission,
+    CompanyView,
+    FilingDetailView,
+    FilingFileBlob,
+    FilingProcessedView,
+    FilingView,
     FinsSubmitRequest,
     FinsSubmission,
     HostCleanupResult,
     HostStatusView,
+    PortfolioHealthView,
+    ProcessedArtifactView,
+    PromptDocumentDetailView,
+    PromptDocumentView,
     PromptRequest,
     PromptSubmission,
     ReplyDeliveryFailureRequest,
     ReplyDeliverySubmitRequest,
     ReplyDeliveryView,
     RunAdminView,
+    SceneMatrixView,
+    ScenePromptCompositionView,
     SessionAdminView,
     WriteRequest,
 )
@@ -200,12 +211,124 @@ class ReplyDeliveryServiceProtocol(BaseServiceProtocol, Protocol):
         ...
 
 
+@runtime_checkable
+class PortfolioBrowsingServiceProtocol(BaseServiceProtocol, Protocol):
+    """portfolio 只读浏览服务协议。
+
+    该协议聚合 ``dayu.fins.storage`` 仓储数据，向 UI 暴露稳定 DTO，
+    本身不涉及写操作；所有写入仍走 fins 管线。
+    """
+
+    def list_companies(self) -> list[CompanyView]:
+        """列出 workspace 中所有公司及其汇总状态。"""
+        ...
+
+    def list_filings(
+        self,
+        ticker: str,
+        *,
+        form_type: str | None = None,
+        fiscal_year: int | None = None,
+        fiscal_period: str | None = None,
+        include_deleted: bool = False,
+    ) -> list[FilingView]:
+        """列出指定公司的 filings。"""
+        ...
+
+    def get_filing_detail(self, ticker: str, document_id: str) -> FilingDetailView:
+        """读取单份 filing 的详情（含文件清单与 processed 摘要）。
+
+        Raises:
+            FileNotFoundError: filing 不存在时抛出。
+        """
+        ...
+
+    def get_filing_processed(self, ticker: str, document_id: str) -> FilingProcessedView:
+        """读取单份 filing 关联的 processed 详情（sections / tables / xbrl facts）。
+
+        Raises:
+            FileNotFoundError: 对应 processed 产物不存在时抛出。
+        """
+        ...
+
+    def list_processed_artifacts(
+        self,
+        ticker: str,
+        *,
+        form_type: str | None = None,
+        fiscal_year: int | None = None,
+        fiscal_period: str | None = None,
+        include_deleted: bool = False,
+    ) -> list[ProcessedArtifactView]:
+        """列出指定公司的 processed 产物。"""
+        ...
+
+    def get_portfolio_health(self, ticker: str) -> PortfolioHealthView:
+        """计算单家公司的健康度（缺失 processed、被拒绝 filings 等）。"""
+        ...
+
+    def read_filing_file(
+        self,
+        ticker: str,
+        document_id: str,
+        filename: str,
+    ) -> FilingFileBlob:
+        """读取 filing 目录下的指定文件。
+
+        Raises:
+            FileNotFoundError: filing 或文件不存在时抛出。
+        """
+        ...
+
+
+@runtime_checkable
+class SceneConfigServiceProtocol(BaseServiceProtocol, Protocol):
+    """scene 与 prompt 配置浏览/编辑服务协议。"""
+
+    def get_scene_matrix(self) -> SceneMatrixView:
+        """读取 scene × 模型矩阵全量快照。"""
+        ...
+
+    def list_prompt_documents(self) -> list[PromptDocumentView]:
+        """列出全部 prompt 文档（manifests / scenes / base / tasks）。"""
+        ...
+
+    def get_prompt_document(self, relative_path: str) -> PromptDocumentDetailView:
+        """读取单份 prompt 文档详情。
+
+        Raises:
+            FileNotFoundError: 文档不存在时抛出。
+            PermissionError: 路径越界（试图访问 prompts 根目录之外）时抛出。
+        """
+        ...
+
+    def update_prompt_document(self, relative_path: str, content: str) -> PromptDocumentDetailView:
+        """覆盖写入 prompt 文档原文。
+
+        Raises:
+            FileNotFoundError: 文档不存在时抛出。
+            PermissionError: 路径越界时抛出。
+            ValueError: 内容非法（如空文本）时抛出。
+        """
+        ...
+
+    def get_scene_prompt_composition(self, scene_name: str) -> ScenePromptCompositionView:
+        """读取指定 scene 的拼接系统提示。
+
+        Raises:
+            FileNotFoundError: scene manifest 不存在时抛出。
+        """
+        ...
+
+
 __all__ = [
     "BaseServiceProtocol",
     "ChatServiceProtocol",
     "FinsServiceProtocol",
     "HostAdminServiceProtocol",
+    "PortfolioBrowsingServiceProtocol",
     "PromptServiceProtocol",
     "ReplyDeliveryServiceProtocol",
+    "SceneConfigServiceProtocol",
     "WriteServiceProtocol",
 ]

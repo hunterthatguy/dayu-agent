@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 金融严谨风格全局样式 */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #fafafa;
+}
+
+/* 表格数字等宽 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 状态色 */
+.status-succeeded {
+  color: theme("colors.emerald.600");
+  background-color: theme("colors.emerald.50");
+}
+
+.status-running {
+  color: theme("colors.blue.600");
+  background-color: theme("colors.blue.50");
+}
+
+.status-failed {
+  color: theme("colors.rose.600");
+  background-color: theme("colors.rose.50");
+}
+
+.status-pending,
+.status-skipped {
+  color: theme("colors.zinc.500");
+  background-color: theme("colors.zinc.100");
+}

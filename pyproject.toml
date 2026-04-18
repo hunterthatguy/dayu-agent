@@ -51,9 +51,14 @@ dependencies = [
     "readability-lxml>=0.8.1",
     "markdownify>=0.13.1",
     "html2text>=2024.2.26",
+    "python-multipart>=0.0.26",
 ]
 
 [project.optional-dependencies]
+# Web UI 服务。
+web = [
+    "uvicorn>=0.30.0",
+]
 # 浏览器回退抓取：安装后需额外执行 `playwright install chromium`。
 browser = [
     "playwright>=1.40.0",

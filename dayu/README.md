@@ -27,7 +27,7 @@
   - 同一行业里，不同公司写出公司自己的特殊结构变量。
 - 位于 Engine 的 web tools 现在的对抗challenge能力很弱，很多网站无法访问。
 - 位于 Fins 的港股、A股财报下载功能尚未实现。
-- GUI 尚未实现；Web UI 目前仍只有 FastAPI 骨架。
+- GUI 尚未实现；Web UI 已有 FastAPI + React 前端骨架。
 - WeChat UI 仅支持文本消息首版，还可添加更多好玩的功能。
 - 财报电话会议记录音频转录文字后信息提取（起码要区分信息来自提问还是回答）尚未实现。
 - 财报presentation信息提取尚未实现。
@@ -1352,6 +1352,29 @@ sequenceDiagram
 - 允许哪些工具进入候选集合
 
 不要把业务解释放进 scene。
+
+### 10.4 新增 Web API
+
+新增 Web API 时，遵循以下步骤：
+
+1. 在 `services/` 中新增或复用 Service，定义稳定 `Protocol`
+2. 在 `services/contracts.py` 中定义 DTO（请求/响应视图）
+3. 在 `web/routes/` 中新增路由文件：
+   - 路由工厂签名：`def create_xxx_router(service: XxxServiceProtocol) -> APIRouter`
+   - 在工厂内定义 Pydantic `BaseModel` 请求/响应
+   - DTO → 响应：手动字段映射，**不要直接 dataclasses.asdict**
+   - Path/Query 参数校验：用 `fastapi.Query / Path` + `Annotated`
+4. 在 `web/fastapi_app.py` 的 `create_fastapi_app()` 中挂载新路由
+5. 在 `cli/web_command.py` 中装配 Service 依赖
+6. 在 `tests/application/test_web_routes_xxx.py` 中添加路由测试
+7. 在 `frontend/src/types/api.ts` 中同步添加 TypeScript 类型定义
+8. 在 `frontend/src/lib/api.ts` 中添加 API 客户端方法
+
+关键边界：
+
+- Web 层（路由）只能依赖 Service Protocol，不能直接调用 Host 或仓储
+- 路由只做请求解析和响应映射，业务逻辑由 Service 负责
+- 前端类型定义必须与后端 DTO 保持一致
 
 ## 11. 建议的阅读顺序
 

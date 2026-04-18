@@ -426,6 +426,41 @@ def _add_fins_process_single_args(parser: argparse.ArgumentParser) -> None:
     _add_fins_common_args(parser)
 
 
+def _add_web_args(parser: argparse.ArgumentParser) -> None:
+    """追加 `web` 子命令参数。"""
+
+    _add_global_args(parser)
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="监听地址（默认 0.0.0.0）",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=9000,
+        help="监听端口（默认 9000）",
+    )
+    parser.add_argument(
+        "--static-dir",
+        type=str,
+        default=None,
+        help="前端构建产物目录（用于生产部署）",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="启用开发模式热重载",
+    )
+    parser.add_argument(
+        "--cors-allow-origins",
+        type=str,
+        default=None,
+        help="CORS 允许的 origins（逗号分隔，用于开发环境，如 http://localhost:5175）",
+    )
+
+
 def _add_agent_args(parser: argparse.ArgumentParser) -> None:
     """追加 Agent 运行时参数（interactive / write 子命令共用，不含 --model-name）。
 
@@ -695,6 +730,10 @@ def _create_parser() -> argparse.ArgumentParser:
         help="工作区根目录（默认 ./workspace）",
     )
     _add_overwrite_arg(init_parser, help_text="覆盖已有配置文件")
+
+    # Web UI 子命令
+    web_parser = subparsers.add_parser("web", help="启动 Web UI 服务器")
+    _add_web_args(web_parser)
 
     # 宿主管理子命令
     register_host_subcommands(subparsers, add_global_args=_add_global_args)

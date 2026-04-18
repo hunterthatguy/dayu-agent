@@ -1,10 +1,11 @@
 # 依赖由 pyproject.toml 统一声明，此文件作为便捷入口。
 # - 运行依赖：pyproject.toml `[project].dependencies`
-# - 可选依赖：pyproject.toml `[project.optional-dependencies]` (browser / test / dev)
+# - 可选依赖：pyproject.toml `[project.optional-dependencies]` (browser / web / test / dev)
 #
 # 常用安装方式：
 #   pip install -e .              # 仅运行依赖
+#   pip install -e .[web]         # 运行 + Web UI
 #   pip install -e .[test]        # 运行 + 测试
-#   pip install -e .[test,dev,browser]  # 全量开发环境
+#   pip install -e .[test,dev,browser,web]  # 全量开发环境
 
--e .[test,dev,browser]
+-e .[test,dev,browser,web]

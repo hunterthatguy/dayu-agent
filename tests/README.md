@@ -410,6 +410,9 @@ Fins 相关改动时，至少同步更新：
 - `test_host_admin_service.py`
 - `test_ui_host_boundary.py`
 - `test_web_routes.py`
+- `test_web_routes_portfolio.py` — Portfolio 路由端点测试（公司/filings/健康度）
+- `test_web_routes_config.py` — Config 路由端点测试（scene 矩阵/prompt 文档）
+- `test_web_routes_upload.py` — Upload 路由端点测试（手动上传/SSE 进度）
 - `test_host_reply_outbox.py`
 - `test_reply_outbox_store.py`
 

@@ -517,12 +517,23 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
     monkeypatch.setattr("dayu.web.fastapi_app.create_reply_outbox_router", _capture_single("reply_outbox"))
     monkeypatch.setattr("dayu.web.fastapi_app.create_fins_router", _capture_single("fins"))
     monkeypatch.setattr("dayu.web.fastapi_app.create_write_router", _capture_zero("write"))
+    monkeypatch.setattr("dayu.web.fastapi_app.create_portfolio_router", _capture_single("portfolio"))
+    monkeypatch.setattr("dayu.web.fastapi_app.create_config_router", _capture_single("config"))
+
+    def _capture_upload(fins_service: object, host_admin_service: object) -> object:
+        captured_calls.append(("upload_fins", fins_service))
+        captured_calls.append(("upload_host", host_admin_service))
+        return "upload_router"
+
+    monkeypatch.setattr("dayu.web.fastapi_app.create_upload_router", _capture_upload)
 
     chat_service = _NamedDependency(name="chat")
     prompt_service = _NamedDependency(name="prompt")
     fins_service = _NamedDependency(name="fins")
     host_admin_service = _NamedDependency(name="admin")
     reply_delivery_service = _NamedDependency(name="reply_delivery")
+    portfolio_browsing_service = _NamedDependency(name="portfolio")
+    scene_config_service = _NamedDependency(name="scene_config")
 
     app = create_fastapi_app(
         chat_service=_as_chat_service(chat_service),
@@ -530,6 +541,8 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         fins_service=_as_fins_service(fins_service),
         host_admin_service=_as_host_admin_service(host_admin_service),
         reply_delivery_service=_as_reply_delivery_service(reply_delivery_service),
+        portfolio_browsing_service=cast(Any, portfolio_browsing_service),
+        scene_config_service=cast(Any, scene_config_service),
     )
 
     typed_app = cast(_FakeApp, app)
@@ -545,6 +558,10 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         ("reply_outbox", reply_delivery_service),
         ("write", None),
         ("fins", fins_service),
+        ("portfolio", portfolio_browsing_service),
+        ("config", scene_config_service),
+        ("upload_fins", fins_service),
+        ("upload_host", host_admin_service),
     ]
     assert typed_app.routers == [
         "sessions_router",
@@ -555,6 +572,9 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         "reply_outbox_router",
         "write_router",
         "fins_router",
+        "portfolio_router",
+        "config_router",
+        "upload_router",
     ]
 
 

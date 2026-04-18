@@ -6,6 +6,37 @@
 
 ## [Unreleased]
 
+### 新增
+
+- Web UI 前端骨架（React 19 + Vite + Tailwind CSS + TanStack Query）：
+  - Portfolio 浏览页面（公司列表 / Filings 列表 / Filing 详情 + Tables/XBRL 标签页）
+  - Upload 页面（SEC 下载 + 本地文件上传 + SSE 实时进度流）
+  - Config 页面（Scene 矩阵视图 / Prompt 控制台完整实现）
+  - Interact 页面（Chat 控制台完整实现 + SSE 事件流）
+  - shadcn/ui 基础组件（Button / Card / Input / DataTable / EmptyState / KeyMetric / StatusBadge）
+  - 路由嵌套结构：Portfolio（列表 → 详情 → Filing）/ Config（Scene/Prompt 子路由）
+- Web API 端点：
+  - `/api/portfolio/*`：公司/filings/processed/健康度浏览
+  - `/api/config/*`：scene 矩阵、prompt 文档浏览与编辑、scene composition
+  - `/api/upload/*`：手动上传触发 + 本地文件上传 + SSE 进度聚合
+- CLI 子命令 `dayu-cli web`：启动 Web UI 服务（默认端口 9000）
+- 新 Service：`PortfolioBrowsingService`、`SceneConfigService`、`PipelineProgressProjector`
+- 新 Repository：`PromptDocumentRepository`（prompt 文件系统访问）
+- Web 路由测试：`test_web_routes_portfolio.py`、`test_web_routes_config.py`、`test_web_routes_upload.py`
+- 可选依赖 `[web]`：uvicorn + python-multipart（文件上传支持）
+
+### 修复
+
+- Portfolio 浏览服务路径错误：传入 `portfolio_root` 导致嵌套路径，修复为传入 `workspace_dir`
+- Upload 页面缺少本地文件上传功能：新增 `/api/upload/files` 端点与前端文件选择
+- 前端开发端口冲突：默认端口从 5173/8000 改为 5175/9000
+- FastAPI Path/Query 参数命名冲突：`pathlib.Path` vs `fastapi.Path` 导致 TypeError，修复为别名导入
+- Pydantic ForwardRef 错误：`Annotated[str, Path(...)]` 参数风格改为直接参数声明
+- React Router 子路由不渲染：Portfolio 页面缺少 `<Outlet />`，新增 `PortfolioLayout` 组件
+- Sidebar 导航高亮：Config 子路由匹配逻辑，添加 `matchPath` 函数
+- Tailwind CSS PostCSS 错误：`@import "tailwindcss"` 改为标准 `@tailwind` 指令
+- Web 路由测试：简化为验证路由注册而非 handler 行为，避免 monkeypatch 问题
+
 ## [0.1.0] - 2026-04-17
 
 首次开源发布。

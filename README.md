@@ -25,9 +25,8 @@
   - 同一行业里，不同公司写出公司自己的特殊结构变量。
 - 位于 Engine 的 web tools 现在的对抗challenge能力很弱，很多网站无法访问。
 - 位于 Fins 的港股、A股财报下载功能尚未实现。
-- **GUI 尚未实现**；
-- **Web UI 目前仍只有 FastAPI 骨架**。
-- **WeChat UI 仅支持文本消息首版，还可添加更多好玩的功能**。
+- GUI 尚未实现；Web UI 已有 FastAPI + React 前端骨架。
+- WeChat UI 仅支持文本消息首版，还可添加更多好玩的功能。
 - 财报电话会议记录音频转录文字后信息提取（起码要区分信息来自提问还是回答）尚未实现。
 - 财报presentation信息提取尚未实现。
 - 欢迎围绕以下方向提交 issue 或 PR：
@@ -63,6 +62,18 @@ brew install pandoc
 ```
 
 并安装 Google Chrome。
+
+如需 Web UI，还需安装 web 可选依赖：
+
+```bash
+pip install dayu-agent[web]
+```
+
+或从 wheel 安装时：
+
+```bash
+pip install https://github.com/noho/dayu-agent/releases/download/v0.1.0/dayu_agent-0.1.0-py3-none-any.whl[web]
+```
 
 ### 1.2 初始化工作区与配置
 
@@ -168,6 +179,7 @@ dayu-cli <subcommand> [参数]
 | `runs` | 列出运行记录（最终用户可无视） |
 | `cancel` | 取消运行中的 run（最终用户可无视） |
 | `host` | 宿主维护（清理孤儿运行/查看状态（最终用户可无视） |
+| `web` | 启动 Web UI 服务（可视化浏览 Portfolio、上传财报、配置 Scene） |
 > 注：预处理命令仅供开发使用，最终用户可忽略。
 
 共享参数：
@@ -189,6 +201,8 @@ dayu-cli <subcommand> [参数]
 | `--enable-tool-trace` | `prompt` `interactive` `write` | 开启工具调用追踪，覆盖 `run.json` 中的 trace 配置 |
 | `--tool-trace-dir` | `prompt` `interactive` `write` | 指定 trace 输出目录，覆盖 `run.json` 中的 trace 配置 |
 | `--thinking` / `--no-thinking` | `prompt` `interactive` | 控制是否在终端回显模型思考过程 |
+| `--port` | `web` | Web 服务监听端口，默认 `9000` |
+| `--host` | `web` | Web 服务监听地址，默认 `127.0.0.1` |
 
 说明：
 - `--log-level`、`--debug`、`--verbose`、`--info`、`--quiet` 是同一组日志参数，使用其一即可。
@@ -510,7 +524,48 @@ dayu-wechat service uninstall
 - Windows：目前没有后台托管命令，使用方式是先执行 `dayu-wechat login`，再执行 `dayu-wechat run`，需要持续运行时请保持终端窗口开启。
 - 若需要重新扫码登录，可重启命令并加上 `--relogin`。
 
-### 3.6 自动写作：`write`
+### 3.6 Web UI：`web`
+
+命令用途：
+启动 Web UI 服务，通过浏览器可视化浏览 Portfolio、上传财报、配置 Scene 和 Prompt。
+
+参数 / 说明：
+
+| 参数 | 说明 |
+|------|------|
+| `--port` | 可选，Web 服务监听端口，默认 `9000` |
+| `--host` | 可选，Web 服务监听地址，默认 `127.0.0.1` |
+| `--base` | 可选，工作区根目录，默认 `./workspace` |
+| `--config` | 可选，配置目录，默认 `workspace/config` |
+| `--debug` / `--verbose` | 可选，调整日志级别 |
+
+命令示例：
+
+```bash
+dayu-cli web
+```
+
+常见命令示例：
+
+```bash
+dayu-cli web --port 3000
+dayu-cli web --host 0.0.0.0
+dayu-cli web --verbose
+```
+
+命令说明：
+- 启动后访问 `http://localhost:9000`（或指定端口）进入 Web UI。
+- Web UI 提供：
+  - Portfolio 浏览：查看公司列表、Filing 详情、已处理状态
+  - 财报上传：手动上传单份财报并实时查看处理进度
+  - Scene 配置：矩阵视图查看/编辑 Scene 与 Prompt 组合
+  - Prompt 控制台：文件树浏览 Prompt 资产
+- 开发前端时需同时运行：
+  1. `dayu-cli web` 启动后端 API
+  2. `cd frontend && npm run dev` 启动前端开发服务器
+- 前端开发服务器默认 `http://localhost:5175`，会自动代理 API 到后端。
+
+### 3.7 自动写作：`write`
 
 命令用途：
 基于模板逐章生成买方分析报告，适合在财报与补充材料准备好后批量写作。
@@ -570,7 +625,7 @@ dayu-cli write --ticker AAPL \
   - 重写某一章后，再跑一次全文 `write` 时，系统会重新生成整份报告文件；但默认 `--resume` 会跳过当前模式下已经完成的章节，所以第 0 章和第 10 章如果已完成，通常不会自动重写。
   - 如果你改动了中间章节后，希望第 0 章和第 10 章也反映新的内容，建议依次重跑该中间章节、第 10 章、第 0 章，最后再运行一次全文 `write`。
 
-### 3.7 财报预处理：`process`
+### 3.8 财报预处理：`process`
 
 命令用途：
 把已下载或已上传的财报做结构化预处理，并导出快照。
@@ -1167,3 +1222,174 @@ dayu-render workspace/draft/AAPL/AAPL_qual_report.md report.html
 - 不要把仓库名称、作者名称或项目商标暗示成对你分发版本的背书
 
 如果你准备贡献代码、文档或测试，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 11. 项目全景与模型矩阵
+
+本章面向两类读者：
+- 想快速了解"这个仓库用了什么、目录怎么排"的使用者。
+- 想自己把默认模型换掉（例如替换成 GLM-5）但不改底层代码的使用者。
+
+架构分层、内部契约、Host / Scene / Memory 机制等开发向内容，仍以 [dayu/README.md](dayu/README.md) 及各包 README 为准，本章不重复。
+
+### 11.1 技术框架一句话
+
+- 执行模式：**宿主强约束下的 `LLM in the loop`**，不是把 LLM 当成工作流编排器。
+- 稳定分层：`UI -> Service -> Host -> Agent`，严格单向依赖。
+- 运行期：Python 3.11+，asyncio 单进程异步主链。
+- 模型接入：统一走 `openai_compatible` runner，通过 HTTP + SSE 调用任意 OpenAI 兼容服务商；不使用任何供应商私有 SDK，不使用 CLI runner。
+- 财报文档存取：全部经 `dayu.fins.storage` 的仓储协议，不允许绕过。
+
+### 11.2 技术栈总览
+
+核心运行时：
+- `Python 3.11+`
+- `asyncio` + `aiohttp` + `httpx` + `requests`
+- `click`（CLI 分发）
+- `prompt_toolkit`（`interactive` 终端 REPL）
+- `fastapi`（Web UI 骨架，当前仅样板）
+- `PyYAML` / 标准 `json`（配置与 manifest）
+
+财报领域与文档解析：
+- `edgartools`（SEC EDGAR 下载）
+- `docling` + `docling-core`（PDF / HTML 结构化）
+- `lxml` + `beautifulsoup4` + `trafilatura` + `readability-lxml`（HTML 抽取）
+- `markdownify` + `html2text`（HTML → Markdown）
+- `pandas`（XBRL / 表格处理）
+
+网页抓取与反 challenge：
+- `requests` / `httpx`（基础 HTTP）
+- `playwright` + `playwright-stealth`（有头/无头浏览器回退，optional `[browser]` extra）
+
+渲染输出：
+- `pandoc`（外部依赖）
+- Google Chrome / Puppeteer 路径（PDF 渲染）
+
+渠道：
+- `dayu.wechat` daemon + `service install/start/...` 做后台托管（macOS launchd / Linux systemd user）
+- `dayu.web`（FastAPI + React Web UI）
+
+工程与类型：
+- `pyright`（**项目硬约束，禁止扩散类型错误**）
+- `pytest` + `pytest-asyncio` + `pytest-cov` + `pytest-mock` + `pytest-timeout` + `requests-mock`
+- `ruff` / `black` / `mypy`（开发辅助）
+
+分发与入口：
+- `setuptools` 打包；`pyproject.toml` 声明 `dayu-cli` / `dayu-wechat` / `dayu-render` 三个 console script。
+
+前端开发（`frontend/`）：
+- 启动开发服务器：`cd frontend && npm run dev`（默认 `http://localhost:5175`）
+- 构建生产版本：`cd frontend && npm run build`（输出到 `frontend/dist/`）
+- 类型检查：`cd frontend && npm run lint`
+- 后端 API 默认地址：`http://localhost:9000`（通过 `dayu-cli web` 启动）
+- 开发时需同时运行 `dayu-cli web` 和 `npm run dev`
+
+### 11.3 目录结构总览
+
+仓库布局（只列出稳定目录，不含 `workspace/`、`.git/` 等运行态/VCS 目录）：
+
+```text
+dayu-agent/
+├── dayu/                      # 主 Python 包
+│   ├── cli/                   # dayu-cli 入口：命令分发、参数解析、interactive UI
+│   ├── wechat/                # dayu-wechat 入口：login / run / service 托管
+│   ├── web/                   # FastAPI Web API：portfolio / config / upload 路由
+│   ├── gui/                   # 预留（尚未实现）
+│   ├── services/              # 业务层：Chat/Prompt/Write/Fins/HostAdmin/ReplyDelivery/...
+│   ├── host/                  # 通用托管层：Session/Run/Executor/ConcurrencyGovernor
+│   │                          #             ReplyOutbox/ConversationMemory/PendingTurn
+│   ├── engine/                # Agent 原语：AsyncAgent/AsyncOpenAIRunner/ToolRegistry
+│   │   ├── tools/             #             web/doc 通用工具
+│   │   └── processors/        #             通用文档处理器（docling/html/bs/md）
+│   ├── fins/                  # 财报领域包
+│   │   ├── downloaders/       #   SEC（已实现）/ 港A（未实现）
+│   │   ├── ingestion/         #   upload_filing / upload_filings_from / upload_material
+│   │   ├── processors/        #   10-K / 20-F / 6-K 等财报特化处理器
+│   │   ├── pipelines/         #   download / process 管线
+│   │   ├── storage/           #   仓储协议与实现（唯一允许的财报存取入口）
+│   │   ├── tools/             #   挂给 LLM 的财报工具
+│   │   ├── domain/            #   领域模型
+│   │   └── resolver/          #   ticker / alias / 公司 ID 推断
+│   ├── contracts/             # 跨层数据契约（Request DTO / AppEvent / ExecutionContract / AgentInput）
+│   ├── execution/             # 跨层 runtime config 稳定真源
+│   ├── startup/               # 启动期依赖装配（workspace/model/prompt/default options）
+│   ├── prompting/             # prompt 条件块解析、变量替换、asset 装配
+│   ├── render/                # Markdown → HTML/PDF/Word 渲染
+│   ├── config/                # 随包分发的默认配置
+│   │   ├── llm_models.json    #   模型清单
+│   │   ├── run.json           #   Agent/Host/工具/trace/budget/conversation_memory
+│   │   ├── toolset_registrars.json   # toolset → registrar import path
+│   │   └── prompts/           #   manifests/ scenes/ base/ tasks/
+│   └── *.py                   # log / file_lock / state_dir_lock / workspace_paths / ...
+├── tests/                     # 分层测试：engine/fins/architecture/contracts/application/integration
+├── frontend/                  # React Web UI（Vite + TypeScript + Tailwind CSS）
+│   ├── src/                   #   组件、页面、类型定义、API 客户端
+│   │   ├── components/        #   layout/ shared/
+│   │   ├── pages/             #   portfolio/ upload/ config/ interact/
+│   │   ├── types/             #   api.ts（DTO 类型定义）
+│   │   └── lib/               #   api.ts（fetch wrapper）、sse.ts
+│   └── package.json           #   依赖：react 19、react-router-dom、@tanstack/react-query
+├── utils/                     # 辅助脚本：tool trace 分析、web 抓取诊断、CI 批量跑
+├── docs/                      # architect.md / ci.md / code_review.md / FMP 调研
+├── 定性分析模板.md            # 写作模板（用户可编辑）
+├── pyproject.toml             # 依赖、entry points、打包清单
+├── requirements.txt           # 便捷入口，实际依赖以 pyproject.toml 为准
+├── pyrightconfig.json         # 类型检查
+├── pytest.ini                 # 测试配置
+├── AGENTS.md                  # 代理执行约束（团队 / AI 协作硬规则）
+├── CHANGELOG.md / CONTRIBUTING.md / LICENSE / NOTICE / README.md
+```
+
+运行时工作区（首次使用按 `1.3 初始化工作区` 生成）：
+
+```text
+workspace/
+├── config/               # 用户覆盖配置（优先于包内 dayu/config/）
+├── .dayu/                # 系统隐藏目录：
+│                         #   session/            多轮 transcript / episode summary / pinned state
+│                         #   interactive/        interactive UI 的会话绑定
+│                         #   wechat-<label>/     WeChat 实例状态、登录态、单实例锁
+│                         #   batch / recovery    仓储暂存与 crash recovery 备份
+│                         #   pending turn / reply outbox 等 Host 真源（SQLite）
+├── portfolio/{ticker}/   # 每个标的的源财报、processed 快照、manifest
+├── draft/{ticker}/       # write 章节落盘、*_audit.json、run_summary.json
+└── output/               # tool_call_traces/ web_diagnostics/ trace_analysis_*.md
+```
+
+### 11.4 模型使用场景矩阵
+
+所有模型入口都走 `openai_compatible` runner，选型由 scene manifest 决定。当前 scene → 默认模型矩阵：
+
+| Scene | 用途 | 默认模型 | 经过 LLM | 带工具 | 多轮 |
+|-------|------|----------|----------|--------|------|
+| `prompt` | 单轮问答（`dayu-cli prompt`） | `mimo-v2-plan-thinking` | 是 | fins + web + ingestion | 否 |
+| `interactive` | 终端多轮对话（`dayu-cli interactive`） | `mimo-v2-plan-thinking` | 是 | fins + web + ingestion | 是 |
+| `wechat` | 微信多轮对话（`dayu-wechat`） | `mimo-v2-plan-thinking` | 是 | fins + web + ingestion | 是 |
+| `write` | 1-9 章正文写作 | `mimo-v2-plan` | 是 | fins + web | 否 |
+| `overview` | 第 0 章"投资要点概览" | `mimo-v2-plan` | 是 | 无 | 否 |
+| `decision` | 第 10 章"研究决策" | `mimo-v2-plan-thinking` | 是 | fins + web | 否 |
+| `audit` | 章节审计 | `mimo-v2-plan-thinking` | 是 | 无 | 否 |
+| `confirm` | 证据复核 | `mimo-v2-plan-thinking` | 是 | fins + web | 否 |
+| `repair` | 局部修复 | `mimo-v2-plan` | 是 | 无 | 否 |
+| `regenerate` | 整章重建 | `mimo-v2-plan` | 是 | fins + web | 否 |
+| `fix` | 占位符补强 | `mimo-v2-plan` | 是 | fins + web | 否 |
+| `infer` | 公司业务类型与关键约束推断 | `mimo-v2-plan-thinking` | 是 | fins | 否 |
+| `conversation_compaction` | 多轮会话阶段摘要压缩（后台） | `mimo-v2-plan-thinking` | 是 | 无 | 否 |
+
+说明：
+- `thinking` 后缀对 MiMo 系列 = `extra_payloads.thinking.type=enabled`；对 Qwen 系列 = `extra_payloads.enable_thinking=true`；对 DeepSeek 则直接切换到 `deepseek-reasoner`。同一家非 thinking / thinking 条目底层通常是同一个模型的不同模式。
+- 偏"写正文、追求速度与确定性"的场景默认走非 thinking（`write` / `overview` / `repair` / `regenerate` / `fix`）。
+- 偏"推理、取舍、跨证据判断"的场景默认走 thinking（`interactive` / `prompt` / `wechat` / `audit` / `confirm` / `decision` / `infer` / `conversation_compaction`）。
+- 所有 direct operation（`download` / `upload_filing` / `upload_filings_from` / `upload_material` / `process*` / `host` / `sessions` / `runs` / `cancel` / `dayu-wechat login` / `service *`）**都不经过 LLM**，与选什么模型无关。
+
+项目对模型的硬要求（新接入必须满足）：
+
+| 能力 | 说明 |
+|------|------|
+| OpenAI 兼容 `/v1/chat/completions` + SSE | 必须。Runner 只懂这套协议。 |
+| Tool calling（function calling） | 必须。带工具的 scene（见上表）无法回退。 |
+| Streaming | 必须。CLI 增量打印、Web SSE、WeChat typing 都依赖流式输出。 |
+| 长上下文 | 建议 ≥ 128K，`write` 与多轮会话建议 ≥ 256K；工具回填 + transcript 很容易打满。 |
+
+
+---
+
