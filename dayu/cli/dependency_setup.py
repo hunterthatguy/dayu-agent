@@ -595,6 +595,7 @@ def _prepare_cli_host_dependencies(
     *,
     workspace_config: WorkspaceConfig,
     execution_options: ExecutionOptions | None,
+    enable_event_bus: bool = False,
 ) -> tuple[
     WorkspaceResources,
     ResolvedExecutionOptions,
@@ -607,6 +608,7 @@ def _prepare_cli_host_dependencies(
     Args:
         workspace_config: 工作区路径配置。
         execution_options: 请求级执行选项。
+        enable_event_bus: 是否启用事件总线（Web SSE 需要）。
 
     Returns:
         `(
@@ -652,6 +654,19 @@ def _prepare_cli_host_dependencies(
         run_config=run_config,
         explicit_lane_config=None,
     )
+
+    # 构建事件总线（Web SSE 需要）
+    event_bus = None
+    if enable_event_bus:
+        from dayu.host.host_store import HostStore
+        from dayu.host.run_registry import SQLiteRunRegistry
+        from dayu.host.event_bus import AsyncQueueEventBus
+
+        host_store = HostStore(host_config.store_path)
+        host_store.initialize_schema()
+        run_registry = SQLiteRunRegistry(host_store)
+        event_bus = AsyncQueueEventBus(run_registry=run_registry)
+
     host = Host(
         workspace=workspace,
         model_catalog=model_catalog,
@@ -659,7 +674,7 @@ def _prepare_cli_host_dependencies(
         host_store_path=host_config.store_path,
         lane_config=host_config.lane_config,
         pending_turn_resume_max_attempts=host_config.pending_turn_resume_max_attempts,
-        event_bus=None,
+        event_bus=event_bus,
     )
     recover_host_startup_state(
         HostAdminService(host=host),

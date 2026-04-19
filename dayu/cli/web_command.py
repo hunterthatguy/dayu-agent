@@ -56,7 +56,7 @@ def run_web_command(args: object) -> int:
     if cors_origins_str:
         cors_allow_origins = tuple(cors_origins_str.split(","))
 
-    # 装配依赖
+    # 装配依赖（Web 需要 event bus 支持 SSE）
     (
         workspace,
         _default_execution_options,
@@ -66,6 +66,7 @@ def run_web_command(args: object) -> int:
     ) = _prepare_cli_host_dependencies(
         workspace_config=paths_config,
         execution_options=None,
+        enable_event_bus=True,
     )
 
     chat_service = _build_chat_service(
