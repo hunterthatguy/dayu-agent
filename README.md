@@ -559,6 +559,7 @@ dayu-cli web --verbose
 - Web UI 提供：
   - Portfolio 浏览：查看公司列表、Filing 详情、已处理状态
   - 财报上传（Upload）：支持从 SEC 下载或上传本地财报；实时进度可视化（阶段预显示 + 进度计数）
+  - Interact 对话：实时 SSE 事件流；思考过程独立折叠；工具调用状态可视化；Session 级订阅聚合；Cmd+Enter 快捷提交
   - Scene 配置：矩阵视图查看/编辑 Scene 与 Prompt 组合；模型切换需先配置对应 API Key
   - Prompt 控制台：文件树浏览 Prompt 资产
   - API Keys 配置：配置各服务 API Key，支持 Mimo / DeepSeek / FMP / Tavily / Serper；配置后自动启用对应模型
@@ -570,6 +571,12 @@ dayu-cli web --verbose
   - 点击「开始下载」后立即显示 4 阶段进度框架（解析 ticker / 下载财报 / 解析与抽取 / 维度分析）
   - 下载阶段显示进度计数（如 "下载 filing (2/5): fil_xxx"）
   - 进度条实时更新百分比，正在进行的阶段有动画效果
+- Interact 对话模块说明：
+  - 支持实时 SSE 事件流：助手回复、思考过程、工具调用状态同步显示
+  - 思考过程（reasoning_delta）独立折叠展示，不与最终回答混合
+  - 工具调用显示执行状态：分发（…）、成功（✓）、失败（✗）
+  - Session 级订阅：同一会话下所有 run 事件统一聚合，避免订阅断开
+  - 支持 Cmd+Enter 快捷提交
 - API Key 配置说明：
   - 导航到「API Keys」页面可查看各 API Key 配置状态
   - 支持 MIMO_PLAN_API_KEY、MIMO_API_KEY、DEEPSEEK_API_KEY、FMP_API_KEY、TAVILY_API_KEY、SERPER_API_KEY

@@ -1,19 +1,49 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { AgentEvent, SceneMatrixView } from "@/types/api";
+import { subscribeSse } from "@/lib/sse";
+import type { AgentEvent } from "@/types/api";
+import {
+  INITIAL_TURN_STATE,
+  isTerminalEvent,
+  reduceTurnState,
+  type ChatTurnState,
+  type ChatTurnStatus,
+} from "./chatEventReducer";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
-  content: string;
-  toolCalls?: { name: string; args: Record<string, unknown> }[];
-  isStreaming?: boolean;
+  text: string;
+  reasoning?: string;
+  status?: ChatTurnStatus;
+  toolCalls?: ChatTurnState["toolCalls"];
+  usage?: ChatTurnState["usage"];
+  errorMessage?: string;
 }
 
 interface ChatSession {
   sessionId: string;
   messages: Message[];
+}
+
+const STATUS_LABEL: Record<ChatTurnStatus, string> = {
+  streaming: "处理中…",
+  completed: "完成",
+  cancelled: "已取消",
+  error: "出错",
+};
+
+function projectMessage(message: Message, state: ChatTurnState): Message {
+  return {
+    ...message,
+    text: state.content,
+    reasoning: state.reasoning || undefined,
+    status: state.status,
+    toolCalls: state.toolCalls,
+    usage: state.usage,
+    errorMessage: state.lastError,
+  };
 }
 
 export default function ChatConsolePage() {
@@ -22,15 +52,64 @@ export default function ChatConsolePage() {
   const [inputText, setInputText] = useState<string>("");
   const [session, setSession] = useState<ChatSession | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const disposeSseRef = useRef<(() => void) | null>(null);
+  const turnStateRef = useRef<ChatTurnState>(INITIAL_TURN_STATE);
 
-  // 获取 scene 矩阵
   const { data: sceneMatrix } = useQuery({
     queryKey: ["scene-matrix"],
     queryFn: api.config.getSceneMatrix,
   });
 
-  // 提交对话
+  const closeActiveStream = useCallback(() => {
+    disposeSseRef.current?.();
+    disposeSseRef.current = null;
+  }, []);
+
+  const subscribeToSession = useCallback(
+    (sessionId: string, messageId: string) => {
+      closeActiveStream();
+      turnStateRef.current = INITIAL_TURN_STATE;
+
+      const applyState = (next: ChatTurnState) => {
+        turnStateRef.current = next;
+        setSession((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          return {
+            ...prev,
+            messages: prev.messages.map((m) => (m.id === messageId ? projectMessage(m, next) : m)),
+          };
+        });
+      };
+
+      const dispose = subscribeSse<AgentEvent>(api.chat.getSessionEventsPath(sessionId), {
+        onEvent: (event) => {
+          const next = reduceTurnState(turnStateRef.current, event);
+          if (next !== turnStateRef.current) {
+            applyState(next);
+          }
+          return isTerminalEvent(event);
+        },
+        onError: () => {
+          // EventSource 会自动重连；只有彻底关闭后才走 onClose
+        },
+        onClose: () => {
+          if (disposeSseRef.current === dispose) {
+            disposeSseRef.current = null;
+          }
+          const final = turnStateRef.current;
+          if (final.status === "streaming") {
+            applyState({ ...final, status: "error", lastError: final.lastError ?? "事件流中断" });
+          }
+        },
+      });
+
+      disposeSseRef.current = dispose;
+    },
+    [closeActiveStream],
+  );
+
   const submitMutation = useMutation({
     mutationFn: () =>
       api.chat.submitTurn({
@@ -40,19 +119,18 @@ export default function ChatConsolePage() {
         session_id: session?.sessionId || undefined,
       }),
     onSuccess: (response) => {
-      // 添加用户消息
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: inputText,
+        text: inputText,
       };
 
-      // 添加助手消息占位
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: "",
-        isStreaming: true,
+        text: "",
+        status: "streaming",
+        toolCalls: [],
       };
 
       setSession((prev) => ({
@@ -61,149 +139,26 @@ export default function ChatConsolePage() {
       }));
 
       setInputText("");
-      subscribeToEvents(response.session_id, assistantMessage.id);
+      // 使用 session 级订阅（API 返回的 run_id 实际是 session_id）
+      subscribeToSession(response.session_id, assistantMessage.id);
     },
   });
 
-  // SSE 事件订阅
-  const subscribeToEvents = useCallback((sessionId: string, messageId: string) => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    const eventSource = new EventSource(api.chat.getSessionEventsUrl(sessionId));
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = (event) => {
-      try {
-        const agentEvent: AgentEvent = JSON.parse(event.data);
-        handleAgentEvent(agentEvent, messageId);
-      } catch {
-        // 忽略解析错误
-      }
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      setSession((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          messages: prev.messages.map((m) =>
-            m.id === messageId ? { ...m, isStreaming: false } : m,
-          ),
-        };
-      });
-    };
-  }, []);
-
-  const handleAgentEvent = (event: AgentEvent, messageId: string) => {
-    // 后端事件类型：content_delta, reasoning_delta, final_answer, tool_event, error, done
-    if (event.type === "content_delta") {
-      // payload 是字符串
-      const text = event.payload as string | undefined;
-      if (text) {
-        setSession((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            messages: prev.messages.map((m) =>
-              m.id === messageId
-                ? { ...m, content: m.content + text }
-                : m,
-            ),
-          };
-        });
-      }
-    } else if (event.type === "reasoning_delta") {
-      // reasoning/thinking 内容，合并到 content
-      const text = event.payload as string | undefined;
-      if (text) {
-        setSession((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            messages: prev.messages.map((m) =>
-              m.id === messageId
-                ? { ...m, content: m.content + text }
-                : m,
-            ),
-          };
-        });
-      }
-    } else if (event.type === "final_answer" || event.type === "done") {
-      // 最终答案或完成事件
-      setSession((prev) => {
-        if (!prev) return prev;
-        // 如果有 final_answer payload，使用它替换内容
-        if (event.type === "final_answer" && event.payload && typeof event.payload === "object") {
-          const payload = event.payload as { content?: string };
-          const finalContent = payload.content || "";
-          return {
-            ...prev,
-            messages: prev.messages.map((m) =>
-              m.id === messageId ? { ...m, content: finalContent, isStreaming: false } : m,
-            ),
-          };
-        }
-        return {
-          ...prev,
-          messages: prev.messages.map((m) =>
-            m.id === messageId ? { ...m, isStreaming: false } : m,
-          ),
-        };
-      });
-      eventSourceRef.current?.close();
-    } else if (event.type === "tool_event") {
-      // tool_event payload: { engine_event_type: str, data: dict }
-      const payload = event.payload as { engine_event_type?: string; data?: Record<string, unknown> } | undefined;
-      const engineEventType = payload?.engine_event_type;
-      const data = payload?.data;
-      if (engineEventType === "tool_call_start" && data) {
-        const toolName = (data.name as string) || "unknown";
-        setSession((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            messages: prev.messages.map((m) => {
-              if (m.id !== messageId) return m;
-              const toolCalls = m.toolCalls || [];
-              return { ...m, toolCalls: [...toolCalls, { name: toolName, args: {} }] };
-            }),
-          };
-        });
-      }
-    } else if (event.type === "error") {
-      const payload = event.payload as { message?: string } | undefined;
-      const errorMsg = payload?.message || "发生错误";
-      setSession((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          messages: prev.messages.map((m) =>
-            m.id === messageId
-              ? { ...m, content: m.content + `\n[错误: ${errorMsg}]`, isStreaming: false }
-              : m,
-          ),
-        };
-      });
-    }
-  };
-
-  // 新会话
   const handleNewSession = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+    closeActiveStream();
     setSession(null);
   };
 
-  // 滚动到底部
+  useEffect(() => {
+    return () => {
+      closeActiveStream();
+    };
+  }, [closeActiveStream]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages]);
 
-  // 快捷键提交
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -215,7 +170,6 @@ export default function ChatConsolePage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
-      {/* 顶部控制栏 */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-200">
         <select
           value={sceneName}
@@ -243,13 +197,10 @@ export default function ChatConsolePage() {
           新会话
         </button>
         {session && (
-          <span className="text-xs text-zinc-400">
-            Session: {session.sessionId.slice(0, 8)}...
-          </span>
+          <span className="text-xs text-zinc-400">Session: {session.sessionId.slice(0, 8)}…</span>
         )}
       </div>
 
-      {/* 消息流 */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {!session || session.messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-sm text-zinc-500">
@@ -257,45 +208,18 @@ export default function ChatConsolePage() {
           </div>
         ) : (
           session.messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div
-                className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
-                  message.role === "user"
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-800"
-                }`}
-              >
-                <div className="whitespace-pre-wrap">{message.content}</div>
-                {message.toolCalls && message.toolCalls.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-zinc-300/50 text-xs text-zinc-600">
-                    {message.toolCalls.map((tool, i) => (
-                      <div key={i}>🔧 {tool.name}</div>
-                    ))}
-                  </div>
-                )}
-                {message.isStreaming && (
-                  <span className="inline-block w-2 h-4 ml-1 bg-zinc-400 animate-pulse" />
-                )}
-              </div>
-            </div>
+            <MessageBubble key={message.id} message={message} />
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 错误提示 */}
       {submitMutation.isError && (
         <div className="px-4 py-2 bg-rose-50 text-rose-600 text-sm border-t border-rose-200">
           发送失败：{(submitMutation.error as Error).message}
         </div>
       )}
 
-      {/* 底部输入区 */}
       <div className="px-4 py-3 border-t border-zinc-200">
         <div className="flex gap-2">
           <textarea
@@ -318,4 +242,67 @@ export default function ChatConsolePage() {
       </div>
     </div>
   );
+}
+
+function MessageBubble({ message }: { message: Message }) {
+  const isUser = message.role === "user";
+  const status = message.status;
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+          isUser ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-800"
+        }`}
+      >
+        {message.reasoning && !isUser && (
+          <details className="mb-2 text-xs text-zinc-500">
+            <summary className="cursor-pointer select-none">思考过程</summary>
+            <div className="mt-1 whitespace-pre-wrap">{message.reasoning}</div>
+          </details>
+        )}
+        <div className="whitespace-pre-wrap">{message.text}</div>
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-zinc-300/50 text-xs text-zinc-600 space-y-1">
+            {message.toolCalls.map((tool) => (
+              <div key={tool.id}>
+                <span className="font-mono">[{toolStateGlyph(tool.state)}]</span> {tool.name}
+                {tool.argumentsPreview && (
+                  <span className="text-zinc-400"> · {tool.argumentsPreview}</span>
+                )}
+                {tool.errorMessage && (
+                  <span className="text-rose-500"> · {tool.errorMessage}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!isUser && status === "streaming" && (
+          <span className="inline-block w-2 h-4 ml-1 bg-zinc-400 animate-pulse" />
+        )}
+        {!isUser && status && status !== "streaming" && (
+          <div
+            className={`mt-2 text-xs ${
+              status === "completed"
+                ? "text-emerald-600"
+                : status === "cancelled"
+                  ? "text-amber-600"
+                  : "text-rose-600"
+            }`}
+          >
+            {STATUS_LABEL[status]}
+            {message.errorMessage ? `：${message.errorMessage}` : ""}
+            {message.usage?.totalTokens !== undefined && (
+              <span className="ml-2 text-zinc-400">tokens: {message.usage.totalTokens}</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function toolStateGlyph(state: "dispatched" | "succeeded" | "failed"): string {
+  if (state === "succeeded") return "✓";
+  if (state === "failed") return "✗";
+  return "…";
 }

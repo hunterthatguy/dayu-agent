@@ -186,9 +186,9 @@ export const api = {
         body: JSON.stringify(body),
       }),
 
-    // SSE 端点直接连接后端端口 9000（绕过 Vite 代理）
-    getSessionEventsUrl: (sessionId: string) =>
-      `http://localhost:9000/api/sessions/${sessionId}/events`,
+    getRunEventsPath: (runId: string) => `/api/runs/${runId}/events`,
+
+    getSessionEventsPath: (sessionId: string) => `/api/sessions/${sessionId}/events`,
   },
 
   settings: {

@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const SSE_URL_PATTERN = /(\/progress\/|\/events(\?|$))/;
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -15,22 +17,17 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:9000",
         changeOrigin: true,
-        // SSE 代理配置：禁用所有缓冲
         configure: (proxy) => {
-          // 设置代理选项
           proxy.on("proxyReq", (proxyReq, req) => {
-            // SSE 端点特殊处理
-            if (req.url?.includes("/progress/")) {
+            if (req.url && SSE_URL_PATTERN.test(req.url)) {
               proxyReq.setHeader("Accept", "text/event-stream");
               proxyReq.setHeader("Cache-Control", "no-cache");
               proxyReq.setHeader("Connection", "keep-alive");
             }
           });
 
-          // 响应头处理
           proxy.on("proxyRes", (proxyRes, req) => {
-            if (req.url?.includes("/progress/")) {
-              // 关键：禁用所有缓冲
+            if (req.url && SSE_URL_PATTERN.test(req.url)) {
               proxyRes.headers["cache-control"] = "no-cache, no-store, must-revalidate";
               proxyRes.headers["connection"] = "keep-alive";
               proxyRes.headers["x-accel-buffering"] = "no";
@@ -38,7 +35,6 @@ export default defineConfig({
             }
           });
 
-          // 错误处理
           proxy.on("error", (err, req) => {
             console.log("[Proxy Error]", req.url, err.message);
           });
