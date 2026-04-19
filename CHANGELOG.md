@@ -33,10 +33,12 @@
 - 前端开发端口冲突：默认端口从 5173/8000 改为 5175/9000
 - FastAPI Path/Query 参数命名冲突：`pathlib.Path` vs `fastapi.Path` 导致 TypeError，修复为别名导入
 - Pydantic ForwardRef 错误：`Annotated[str, Path(...)]` 参数风格改为直接参数声明
+- **FastAPI request body 解析错误**：Pydantic 模型在函数内部定义导致 body 被解析为 query 参数（422），移至模块级别并使用 `Body(...)` 显式声明
 - React Router 子路由不渲染：Portfolio 页面缺少 `<Outlet />`，新增 `PortfolioLayout` 组件
 - Sidebar 导航高亮：Config 子路由匹配逻辑，添加 `matchPath` 函数
 - Tailwind CSS PostCSS 错误：`@import "tailwindcss"` 改为标准 `@tailwind` 指令
 - Web 路由测试：简化为验证路由注册而非 handler 行为，避免 monkeypatch 问题
+- 前端错误提示：FastAPI 验证错误数组格式正确显示（不再显示 `[object Object]`）
 - 安装链接更新：v0.1.0 → v0.1.1 wheel 地址（#8 from main）
 
 ## [0.1.0] - 2026-04-17
