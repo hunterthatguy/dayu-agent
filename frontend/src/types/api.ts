@@ -218,3 +218,26 @@ export interface AgentEvent {
   payload: Record<string, unknown>;
   run_id?: string;
 }
+
+// === Settings ===
+
+export interface ApiKeyStatusResponse {
+  key_name: string;
+  display_name: string;
+  is_configured: boolean;
+  source: string;
+  url: string;
+}
+
+export interface ModelRequirementResponse {
+  model_name: string;
+  required_key: string;
+  key_display_name: string;
+  is_available: boolean;
+}
+
+export interface SceneModelUpdateResponse {
+  scene_name: string;
+  old_model: string;
+  new_model: string;
+}

@@ -8,6 +8,24 @@
 
 ### 新增
 
+- Web UI API Key 配置页面（Ver 1.0.4）：
+  - 导航新增「API Keys」入口
+  - 支持 MIMO_PLAN_API_KEY、MIMO_API_KEY、DEEPSEEK_API_KEY、FMP_API_KEY、TAVILY_API_KEY、SERPER_API_KEY 配置
+  - API Key 存储在 `workspace/.dayu/api_keys.json`，同时同步到当前进程环境变量
+  - 配置状态实时显示（已配置/未配置/来源）
+  - 各 API Key 申请地址链接一键跳转
+- Web UI Config 页面模型联动（Ver 1.0.4）：
+  - Scene 矩阵显示模型 API Key 可用性状态
+  - 未配置 API Key 的模型禁用选择，显示「需要配置 API Key」提示
+  - 点击可选模型自动更新 Scene manifest 默认模型
+- Web API 端点（Ver 1.0.4）：
+  - `/api/settings/api-keys`：列出 API Key 配置状态
+  - `/api/settings/api-keys/{key_name}`：设置/清空 API Key
+  - `/api/settings/models`：列出模型 API Key 要求
+  - `/api/settings/scenes/{scene_name}/default-model`：更新 Scene 默认模型
+- 后端服务（Ver 1.0.4）：
+  - `ApiKeyConfigService`：API Key 配置管理服务
+  - `SceneConfigService.update_scene_default_model`：更新 Scene manifest 默认模型
 - Web UI 前端骨架（React 19 + Vite + Tailwind CSS + TanStack Query）：
   - Portfolio 浏览页面（公司列表 / Filings 列表 / Filing 详情 + Tables/XBRL 标签页）
   - Upload 页面（SEC 下载 + 本地文件上传 + SSE 实时进度流）

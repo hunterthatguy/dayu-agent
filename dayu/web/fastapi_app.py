@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dayu.services.protocols import (
+    ApiKeyConfigServiceProtocol,
     ChatServiceProtocol,
     FinsServiceProtocol,
     HostAdminServiceProtocol,
@@ -24,6 +25,7 @@ from dayu.web.routes.fins import create_fins_router
 from dayu.web.routes.portfolio import create_portfolio_router
 from dayu.web.routes.config import create_config_router
 from dayu.web.routes.upload import create_upload_router
+from dayu.web.routes.settings import create_settings_router
 
 
 def create_fastapi_app(
@@ -35,6 +37,7 @@ def create_fastapi_app(
     reply_delivery_service: ReplyDeliveryServiceProtocol,
     portfolio_browsing_service: PortfolioBrowsingServiceProtocol,
     scene_config_service: SceneConfigServiceProtocol,
+    api_key_config_service: ApiKeyConfigServiceProtocol,
     static_dir: Path | None = None,
     cors_allow_origins: tuple[str, ...] = (),
 ):
@@ -48,6 +51,7 @@ def create_fastapi_app(
         reply_delivery_service: 回复投递服务实例。
         portfolio_browsing_service: portfolio 浏览服务实例。
         scene_config_service: scene 配置服务实例。
+        api_key_config_service: API key 配置服务实例。
         static_dir: 前端构建产物目录；用于生产部署。
         cors_allow_origins: CORS 允许的 origins；用于开发环境。
 
@@ -97,6 +101,7 @@ def create_fastapi_app(
     app.include_router(create_portfolio_router(portfolio_browsing_service))
     app.include_router(create_config_router(scene_config_service))
     app.include_router(create_upload_router(fins_service, host_admin_service))
+    app.include_router(create_settings_router(api_key_config_service, scene_config_service))
 
     # 静态文件挂载（生产部署用）
     if static_dir is not None:

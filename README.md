@@ -559,12 +559,19 @@ dayu-cli web --verbose
 - Web UI 提供：
   - Portfolio 浏览：查看公司列表、Filing 详情、已处理状态
   - 财报上传：手动上传单份财报并实时查看处理进度
-  - Scene 配置：矩阵视图查看/编辑 Scene 与 Prompt 组合
+  - Scene 配置：矩阵视图查看/编辑 Scene 与 Prompt 组合；模型切换需先配置对应 API Key
   - Prompt 控制台：文件树浏览 Prompt 资产
+  - API Keys 配置：配置各服务 API Key，支持 Mimo / DeepSeek / FMP / Tavily / Serper；配置后自动启用对应模型
 - 开发前端时需同时运行：
   1. `dayu-cli web` 启动后端 API
   2. `cd frontend && npm run dev` 启动前端开发服务器
 - 前端开发服务器默认 `http://localhost:5175`，会自动代理 API 到后端。
+- API Key 配置说明：
+  - 导航到「API Keys」页面可查看各 API Key 配置状态
+  - 支持 MIMO_PLAN_API_KEY、MIMO_API_KEY、DEEPSEEK_API_KEY、FMP_API_KEY、TAVILY_API_KEY、SERPER_API_KEY
+  - 设置后写入本地文件（`workspace/.dayu/api_keys.json`）并同步当前进程环境变量
+  - 在「Config」页面切换 Scene 默认模型时，需先确保对应 API Key 已配置
+  - API Key 申请地址见 [1.2 初始化工作区与配置](#1.2-初始化工作区与配置)
 
 ### 3.7 自动写作：`write`
 
@@ -1325,7 +1332,7 @@ dayu-agent/
 ├── frontend/                  # React Web UI（Vite + TypeScript + Tailwind CSS）
 │   ├── src/                   #   组件、页面、类型定义、API 客户端
 │   │   ├── components/        #   layout/ shared/
-│   │   ├── pages/             #   portfolio/ upload/ config/ interact/
+│   │   ├── pages/             #   portfolio/ upload/ config/ interact/ settings/
 │   │   ├── types/             #   api.ts（DTO 类型定义）
 │   │   └── lib/               #   api.ts（fetch wrapper）、sse.ts
 │   └── package.json           #   依赖：react 19、react-router-dom、@tanstack/react-query

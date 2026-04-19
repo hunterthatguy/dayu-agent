@@ -6,7 +6,9 @@ UI 友好的稳定 DTO，专门服务于配置控制台界面。
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 from dayu.prompting.prompt_plan import PromptFragmentAssetStoreProtocol, build_prompt_assembly_plan
@@ -18,6 +20,7 @@ from dayu.prompting.scene_definition import (
 from dayu.services.contracts import (
     PromptDocumentDetailView,
     PromptDocumentView,
+    SceneDefaultModelUpdateView,
     SceneMatrixRowView,
     SceneMatrixView,
     SceneModelOptionView,
@@ -98,6 +101,71 @@ class SceneConfigService:
             composed_text=composed_text,
             fragments=fragment_ids,
         )
+
+    def update_scene_default_model(self, scene_name: str, model_name: str) -> SceneDefaultModelUpdateView:
+        """更新 scene 的默认模型。
+
+        Args:
+            scene_name: Scene 名称。
+            model_name: 新默认模型名。
+
+        Returns:
+            更新结果视图。
+
+        Raises:
+            FileNotFoundError: scene manifest 不存在。
+            ValueError: 模型不在 allowed_names 中。
+        """
+        normalized_scene = scene_name.strip()
+        if not normalized_scene:
+            raise FileNotFoundError("scene 名称不能为空")
+
+        # 先检查当前定义
+        try:
+            definition = load_scene_definition(self.prompt_asset_store, normalized_scene)
+        except Exception as exc:
+            raise FileNotFoundError(f"scene {normalized_scene} 不存在: {exc}") from exc
+
+        old_model = definition.model.default_name
+
+        # 检查模型是否在 allowed_names 中
+        if model_name not in definition.model.allowed_names:
+            raise ValueError(f"模型 {model_name} 不在 scene {normalized_scene} 的 allowed_names 中")
+
+        # 获取 manifest 文件路径并更新
+        manifest_path = self._get_manifest_path(normalized_scene)
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"manifest 文件不存在: {manifest_path}")
+
+        # 读取并更新
+        content = manifest_path.read_text(encoding="utf-8")
+        data = json.loads(content)
+        model_section = data.get("model")
+        if not isinstance(model_section, dict):
+            raise ValueError(f"manifest 格式错误: 缺少 model 配置")
+
+        model_section["default_name"] = model_name
+        manifest_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        return SceneDefaultModelUpdateView(
+            scene_name=normalized_scene,
+            old_model=old_model,
+            new_model=model_name,
+        )
+
+    def _get_manifest_path(self, scene_name: str) -> Path:
+        """获取 scene manifest 文件路径（优先返回 workspace 版本）。"""
+        repo = self.prompt_document_repository
+        # 优先使用 workspace 目录（可写入）
+        if repo.workspace_prompts_dir is not None:
+            workspace_manifest = repo.workspace_prompts_dir / "manifests" / f"{scene_name}.json"
+            if workspace_manifest.exists():
+                return workspace_manifest
+        # 回退到包内目录
+        return repo.package_prompts_dir / "manifests" / f"{scene_name}.json"
 
     def _collect_scene_names(self, documents: Iterable[PromptDocumentView]) -> list[str]:
         """从文档列表中提取 scene 名（基于 manifests 目录）。"""

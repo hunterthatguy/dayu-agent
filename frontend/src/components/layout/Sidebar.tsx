@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { type ReactNode } from "react";
-import { LayoutDashboard, Upload, Settings, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Upload, Settings, MessageSquare, Key } from "lucide-react";
 import type { RouteConfig } from "./AppShell";
 import { cn } from "@/lib/cn";
 
@@ -8,6 +8,7 @@ const NAV_ITEMS: { path: string; label: string; icon: ReactNode }[] = [
   { path: "/portfolio", label: "Portfolio", icon: <LayoutDashboard className="w-5 h-5" /> },
   { path: "/upload", label: "Upload", icon: <Upload className="w-5 h-5" /> },
   { path: "/config/scenes", label: "Config", icon: <Settings className="w-5 h-5" /> },
+  { path: "/settings/api-keys", label: "API Keys", icon: <Key className="w-5 h-5" /> },
   { path: "/interact", label: "Interact", icon: <MessageSquare className="w-5 h-5" /> },
 ];
 
@@ -15,6 +16,9 @@ const NAV_ITEMS: { path: string; label: string; icon: ReactNode }[] = [
 function matchPath(currentPath: string, navPath: string): boolean {
   if (navPath === "/config/scenes") {
     return currentPath.startsWith("/config");
+  }
+  if (navPath === "/settings/api-keys") {
+    return currentPath.startsWith("/settings");
   }
   return currentPath === navPath || currentPath.startsWith(navPath + "/");
 }

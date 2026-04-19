@@ -85,6 +85,9 @@ def run_web_command(args: object) -> int:
     # 构建 scene config service
     scene_config_service = _build_scene_config_service(workspace_dir)
 
+    # 构建 api key config service
+    api_key_config_service = _build_api_key_config_service(workspace_dir)
+
     # 构建 fins service
     from dayu.services.fins_service import FinsService
 
@@ -106,6 +109,7 @@ def run_web_command(args: object) -> int:
         reply_delivery_service=reply_delivery_service,
         portfolio_browsing_service=cast(Any, portfolio_browsing_service),
         scene_config_service=cast(Any, scene_config_service),
+        api_key_config_service=cast(Any, api_key_config_service),
         static_dir=static_dir,
         cors_allow_origins=cors_allow_origins,
     )
@@ -186,6 +190,25 @@ def _build_portfolio_browsing_service(workspace_dir: Path) -> object:
             repository_set=repository_set,
         ),
     )
+
+
+def _build_api_key_config_service(workspace_dir: Path) -> object:
+    """构建 ApiKeyConfigService 实例。
+
+    Args:
+        workspace_dir: 工作区根目录。
+
+    Returns:
+        ApiKeyConfigService 实例。
+
+    Raises:
+        无。
+    """
+
+    from dayu.services.api_key_config_service import ApiKeyConfigService
+
+    dayu_dir = workspace_dir / ".dayu"
+    return ApiKeyConfigService(dayu_dir=dayu_dir)
 
 
 def _build_scene_config_service(workspace_dir: Path) -> object:

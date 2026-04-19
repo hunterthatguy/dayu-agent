@@ -9,6 +9,7 @@ import UploadPage from "@/pages/upload/UploadPage";
 import SceneMatrixPage from "@/pages/config/SceneMatrixPage";
 import PromptConsolePage from "@/pages/config/PromptConsolePage";
 import ChatConsolePage from "@/pages/interact/ChatConsolePage";
+import ApiKeyPage from "@/pages/settings/ApiKeyPage";
 
 export interface RouteConfig {
   path: string;
@@ -19,6 +20,10 @@ export interface RouteConfig {
 }
 
 function ConfigLayout() {
+  return <Outlet />;
+}
+
+function SettingsLayout() {
   return <Outlet />;
 }
 
@@ -80,6 +85,23 @@ const routeConfigs: RouteConfig[] = [
         path: "prompts/:path*",
         label: "Prompt 编辑",
         element: <PromptConsolePage />,
+      },
+    ],
+  },
+  {
+    path: "/settings",
+    label: "Settings",
+    element: <SettingsLayout />,
+    children: [
+      {
+        path: "",
+        label: "默认",
+        element: <Navigate to="/settings/api-keys" replace />,
+      },
+      {
+        path: "api-keys",
+        label: "API Keys",
+        element: <ApiKeyPage />,
       },
     ],
   },

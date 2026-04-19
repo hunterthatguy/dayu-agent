@@ -795,7 +795,59 @@ class PipelineProgressView:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class ApiKeyStatusView:
+    """API key 配置状态视图。
+
+    Attributes:
+        key_name: API key 变量名。
+        display_name: 显示名称。
+        is_configured: 是否已配置。
+        source: 配置来源（file/env/空）。
+        url: 申请地址。
+    """
+
+    key_name: str
+    display_name: str
+    is_configured: bool
+    source: str
+    url: str
+
+
+@dataclass(frozen=True)
+class ModelApiKeyRequirementView:
+    """模型 API key 要求视图。
+
+    Attributes:
+        model_name: 模型名称。
+        required_key: 所需 API key 变量名。
+        key_display_name: API key 显示名称。
+        is_available: 是否可用（已配置所需 API key）。
+    """
+
+    model_name: str
+    required_key: str
+    key_display_name: str
+    is_available: bool
+
+
+@dataclass(frozen=True)
+class SceneDefaultModelUpdateView:
+    """Scene 默认模型更新视图。
+
+    Attributes:
+        scene_name: Scene 名称。
+        old_model: 旧默认模型名。
+        new_model: 新默认模型名。
+    """
+
+    scene_name: str
+    old_model: str
+    new_model: str
+
+
 __all__ = [
+    "ApiKeyStatusView",
     "ChatPendingTurnView",
     "ChatResumeRequest",
     "ChatTurnSubmission",
@@ -813,6 +865,7 @@ __all__ = [
     "HostCleanupResult",
     "HostStatusView",
     "LaneStatusView",
+    "ModelApiKeyRequirementView",
     "PipelineProgressView",
     "PipelineStageState",
     "PipelineStageView",
@@ -827,6 +880,7 @@ __all__ = [
     "ReplyDeliverySubmitRequest",
     "ReplyDeliveryView",
     "RunAdminView",
+    "SceneDefaultModelUpdateView",
     "SceneMatrixRowView",
     "SceneMatrixView",
     "SceneModelConfig",

@@ -6,6 +6,7 @@ from typing import AsyncIterator, Protocol, runtime_checkable
 
 from dayu.contracts.events import AppEvent, PublishedRunEventProtocol
 from dayu.services.contracts import (
+    ApiKeyStatusView,
     ChatPendingTurnView,
     ChatResumeRequest,
     ChatTurnRequest,
@@ -19,6 +20,7 @@ from dayu.services.contracts import (
     FinsSubmission,
     HostCleanupResult,
     HostStatusView,
+    ModelApiKeyRequirementView,
     PortfolioHealthView,
     ProcessedArtifactView,
     PromptDocumentDetailView,
@@ -29,6 +31,7 @@ from dayu.services.contracts import (
     ReplyDeliverySubmitRequest,
     ReplyDeliveryView,
     RunAdminView,
+    SceneDefaultModelUpdateView,
     SceneMatrixView,
     ScenePromptCompositionView,
     SessionAdminView,
@@ -320,8 +323,62 @@ class SceneConfigServiceProtocol(BaseServiceProtocol, Protocol):
         """
         ...
 
+    def update_scene_default_model(self, scene_name: str, model_name: str) -> SceneDefaultModelUpdateView:
+        """更新 scene 的默认模型。
+
+        Args:
+            scene_name: Scene 名称。
+            model_name: 新默认模型名。
+
+        Returns:
+            更新结果视图。
+
+        Raises:
+            FileNotFoundError: scene manifest 不存在时抛出。
+            ValueError: 模型不在 allowed_names 中时抛出。
+        """
+        ...
+
+
+@runtime_checkable
+class ApiKeyConfigServiceProtocol(BaseServiceProtocol, Protocol):
+    """API Key 配置服务协议。"""
+
+    def list_api_key_status(self) -> list[ApiKeyStatusView]:
+        """返回所有可配置 API key 的状态列表。"""
+        ...
+
+    def get_api_key(self, key_name: str) -> str | None:
+        """获取指定 API key 的值。"""
+        ...
+
+    def set_api_key(self, key_name: str, value: str) -> None:
+        """设置 API key。
+
+        Raises:
+            ValueError: key_name 不支持或值为空时抛出。
+        """
+        ...
+
+    def clear_api_key(self, key_name: str) -> None:
+        """清空 API key。
+
+        Raises:
+            ValueError: key_name 不支持时抛出。
+        """
+        ...
+
+    def get_model_api_key_requirements(self) -> list[ModelApiKeyRequirementView]:
+        """返回各模型的 API key 要求。"""
+        ...
+
+    def is_model_available(self, model_name: str) -> bool:
+        """检查模型是否可用（是否配置了所需 API key）。"""
+        ...
+
 
 __all__ = [
+    "ApiKeyConfigServiceProtocol",
     "BaseServiceProtocol",
     "ChatServiceProtocol",
     "FinsServiceProtocol",

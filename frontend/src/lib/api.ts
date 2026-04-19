@@ -13,6 +13,9 @@ import type {
   FileUploadResponse,
   ChatTurnSubmission,
   ChatTurnResponse,
+  ApiKeyStatusResponse,
+  ModelRequirementResponse,
+  SceneModelUpdateResponse,
 } from "@/types/api";
 
 const BASE = ""; // 同源；dev 由 vite proxy 转发
@@ -172,5 +175,30 @@ export const api = {
 
     getRunEventsUrl: (runId: string) =>
       `${BASE}/api/runs/${runId}/events`,
+  },
+
+  settings: {
+    listApiKeys: () =>
+      request<ApiKeyStatusResponse[]>("/api/settings/api-keys"),
+
+    setApiKey: (keyName: string, value: string) =>
+      request<ApiKeyStatusResponse>(`/api/settings/api-keys/${keyName}`, {
+        method: "PUT",
+        body: JSON.stringify({ value }),
+      }),
+
+    clearApiKey: (keyName: string) =>
+      request<{ status: string; key_name: string }>(`/api/settings/api-keys/${keyName}`, {
+        method: "DELETE",
+      }),
+
+    listModelRequirements: () =>
+      request<ModelRequirementResponse[]>("/api/settings/models"),
+
+    updateSceneDefaultModel: (sceneName: string, modelName: string) =>
+      request<SceneModelUpdateResponse>(`/api/settings/scenes/${sceneName}/default-model`, {
+        method: "PUT",
+        body: JSON.stringify({ model_name: modelName }),
+      }),
   },
 };

@@ -527,6 +527,13 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
 
     monkeypatch.setattr("dayu.web.fastapi_app.create_upload_router", _capture_upload)
 
+    def _capture_settings(api_key_service: object, scene_config_service: object) -> object:
+        captured_calls.append(("settings_api_key", api_key_service))
+        captured_calls.append(("settings_scene_config", scene_config_service))
+        return "settings_router"
+
+    monkeypatch.setattr("dayu.web.fastapi_app.create_settings_router", _capture_settings)
+
     chat_service = _NamedDependency(name="chat")
     prompt_service = _NamedDependency(name="prompt")
     fins_service = _NamedDependency(name="fins")
@@ -534,6 +541,7 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
     reply_delivery_service = _NamedDependency(name="reply_delivery")
     portfolio_browsing_service = _NamedDependency(name="portfolio")
     scene_config_service = _NamedDependency(name="scene_config")
+    api_key_config_service = _NamedDependency(name="api_key_config")
 
     app = create_fastapi_app(
         chat_service=_as_chat_service(chat_service),
@@ -543,6 +551,7 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         reply_delivery_service=_as_reply_delivery_service(reply_delivery_service),
         portfolio_browsing_service=cast(Any, portfolio_browsing_service),
         scene_config_service=cast(Any, scene_config_service),
+        api_key_config_service=cast(Any, api_key_config_service),
     )
 
     typed_app = cast(_FakeApp, app)
@@ -562,6 +571,8 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         ("config", scene_config_service),
         ("upload_fins", fins_service),
         ("upload_host", host_admin_service),
+        ("settings_api_key", api_key_config_service),
+        ("settings_scene_config", scene_config_service),
     ]
     assert typed_app.routers == [
         "sessions_router",
@@ -575,6 +586,7 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         "portfolio_router",
         "config_router",
         "upload_router",
+        "settings_router",
     ]
 
 
