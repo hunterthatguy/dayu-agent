@@ -8,6 +8,14 @@
 
 ### 新增
 
+- Web UI Upload 进度可视化优化（Ver 1.0.5）：
+  - 点击「开始下载」后立即显示进度框架（4 个阶段预显示）
+  - 下载阶段显示进度计数（如 "下载 filing (2/5): fil_xxx"）
+  - 进度条实时更新百分比
+  - 正在进行阶段动画效果（蓝色脉冲）
+- 后端进度增强（Ver 1.0.5）：
+  - `PipelineProgressProjector` 添加下载进度计数追踪
+  - 从 FILING_STARTED 提取 total_filings 显示进度
 - Web UI API Key 配置页面（Ver 1.0.4）：
   - 导航新增「API Keys」入口
   - 支持 MIMO_PLAN_API_KEY、MIMO_API_KEY、DEEPSEEK_API_KEY、FMP_API_KEY、TAVILY_API_KEY、SERPER_API_KEY 配置
@@ -46,6 +54,8 @@
 
 ### 修复
 
+- Upload SSE 订阅错误：使用 `subscribe_run_events(run_id)` 但 `run_id` 实际是 `session_id`，修复为 `subscribe_session_events(session_id)`（Ver 1.0.5）
+- Config 页面模型不可选：`_MODEL_API_KEY_MAP` 模型名称与 `llm_models.json` 不一致，修复映射（Ver 1.0.4）
 - Portfolio 浏览服务路径错误：传入 `portfolio_root` 导致嵌套路径，修复为传入 `workspace_dir`
 - Upload 页面缺少本地文件上传功能：新增 `/api/upload/files` 端点与前端文件选择
 - 前端开发端口冲突：默认端口从 5173/8000 改为 5175/9000

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Callable
 
@@ -50,6 +50,14 @@ _PROCESS_END_EVENTS: tuple[FinsProgressEventName, ...] = (
 )
 
 
+@dataclass
+class _DownloadProgressState:
+    """下载进度追踪状态（可变）。"""
+
+    downloaded_count: int = 0
+    total_filings: int = 0
+
+
 @dataclass(frozen=True)
 class PipelineProgressProjector:
     """SSE 事件 → PipelineProgressView 投影器（无状态纯函数风格的累加器）。
@@ -64,6 +72,10 @@ class PipelineProgressProjector:
     run_id: str
     session_id: str
     _clock: Callable[[], datetime] = datetime.now  # 测试中可注入
+    # 可变进度状态（使用 field 绕过 frozen）
+    _download_state: _DownloadProgressState = field(
+        default_factory=_DownloadProgressState
+    )
 
     def initial(self) -> PipelineProgressView:
         """返回初始状态（所有阶段 pending）。
@@ -166,6 +178,13 @@ class PipelineProgressProjector:
             resolve_stage = self._mark_stage_succeeded(resolve_stage, now_iso)
             stages[0] = resolve_stage
 
+            # FILING_STARTED: 提取 total_filings 并更新进度计数
+            if event_name == FinsProgressEventName.FILING_STARTED:
+                total_filings = self._extract_total_filings(payload)
+                if total_filings and total_filings > 0:
+                    self._download_state.total_filings = total_filings
+                self._download_state.downloaded_count += 1
+
             # download 阶段启动
             download_stage = self._mark_stage_running(stages[1], now_iso)
             download_stage = self._apply_download_event_message(download_stage, event_name, payload)
@@ -180,6 +199,15 @@ class PipelineProgressProjector:
             return self._build_view(current, stages, "", "failed", now_iso)
 
         if event_name in _DOWNLOAD_END_EVENTS:
+            # FILING_COMPLETED: 更新进度计数
+            if event_name == FinsProgressEventName.FILING_COMPLETED:
+                self._download_state.downloaded_count += 1
+                # 更新 message 显示进度
+                msg = self._build_download_progress_message()
+                download_stage = self._update_stage_message(stages[1], msg)
+                stages[1] = download_stage
+                return self._build_view(current, stages, "download", "running", now_iso)
+
             download_stage = self._mark_stage_succeeded(stages[1], now_iso)
             stages[1] = download_stage
 
@@ -334,9 +362,36 @@ class PipelineProgressProjector:
             return self._update_stage_message(stage, "公司信息已解析")
         if event_name == FinsProgressEventName.FILING_STARTED:
             filing_id = getattr(payload, "document_id", None)
+            total = self._download_state.total_filings
+            count = self._download_state.downloaded_count
+            if total > 0:
+                return self._update_stage_message(
+                    stage, f"下载 filing ({count}/{total}): {filing_id}"
+                )
             if filing_id:
                 return self._update_stage_message(stage, f"开始下载 filing: {filing_id}")
         return stage
+
+    def _extract_total_filings(self, payload: object) -> int:
+        """从 payload 提取 total_filings。"""
+
+        # payload 可能是 dict 或有属性的对象
+        if hasattr(payload, "total_filings"):
+            val = getattr(payload, "total_filings", 0)
+            return int(val) if val else 0
+        if isinstance(payload, dict):
+            val = payload.get("total_filings", 0)
+            return int(val) if val else 0
+        return 0
+
+    def _build_download_progress_message(self) -> str:
+        """构建下载进度 message。"""
+
+        total = self._download_state.total_filings
+        count = self._download_state.downloaded_count
+        if total > 0:
+            return f"下载进度 ({count}/{total})"
+        return "下载中"
 
     def _apply_process_event_message(
         self,

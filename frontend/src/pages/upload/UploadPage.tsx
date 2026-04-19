@@ -3,7 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { subscribePipelineProgress } from "@/lib/sse";
 import PipelineGraph from "@/components/shared/PipelineGraph";
-import type { PipelineProgressView } from "@/types/api";
+import type { PipelineProgressView, PipelineStageView } from "@/types/api";
+
+// 预定义的阶段模板（用于立即显示进度框架）
+const INITIAL_STAGES: PipelineStageView[] = [
+  { key: "resolve", title: "解析 ticker", state: "pending", message: "", started_at: "", finished_at: "" },
+  { key: "download", title: "下载财报", state: "pending", message: "", started_at: "", finished_at: "" },
+  { key: "process", title: "解析与抽取", state: "pending", message: "", started_at: "", finished_at: "" },
+  { key: "analyze", title: "维度分析", state: "pending", message: "", started_at: "", finished_at: "" },
+];
+
+// 创建初始进度视图（点击按钮后立即显示）
+function createInitialProgress(ticker: string): PipelineProgressView {
+  return {
+    ticker,
+    run_id: "",
+    session_id: "",
+    stages: INITIAL_STAGES,
+    active_stage_key: "resolve",
+    terminal_state: "running",
+    updated_at: new Date().toISOString(),
+  };
+}
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -35,7 +56,8 @@ export default function UploadPage() {
 
     setLoading(true);
     setError(null);
-    setProgress(null);
+    // 点击后立即显示进度框架（缓解用户焦虑）
+    setProgress(createInitialProgress(normalizedTicker));
 
     try {
       const result = await api.upload.manualUpload({
@@ -66,6 +88,7 @@ export default function UploadPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
       setLoading(false);
+      setProgress(null);
     }
   };
 
@@ -83,7 +106,8 @@ export default function UploadPage() {
 
     setLoading(true);
     setError(null);
-    setProgress(null);
+    // 点击后立即显示进度框架（缓解用户焦虑）
+    setProgress(createInitialProgress(normalizedTicker));
 
     try {
       const result = await api.upload.uploadFiles(normalizedTicker, files);
@@ -110,6 +134,7 @@ export default function UploadPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "文件上传失败");
       setLoading(false);
+      setProgress(null);
     }
   };
 

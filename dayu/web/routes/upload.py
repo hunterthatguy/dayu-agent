@@ -113,8 +113,8 @@ def create_upload_router(
         )
         current = projector.initial()
 
-        # 订阅 run 事件流
-        stream = host_admin_service.subscribe_run_events(run_id)
+        # 订阅 session 事件流（因为 run_id 实际是 session_id）
+        stream = host_admin_service.subscribe_session_events(session_id)
 
         # 发送初始状态
         yield f"data: {json.dumps(_view_to_dict(current), ensure_ascii=False)}\n\n"
