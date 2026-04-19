@@ -55,6 +55,9 @@ def run_web_command(args: object) -> int:
     cors_allow_origins: tuple[str, ...] = ()
     if cors_origins_str:
         cors_allow_origins = tuple(cors_origins_str.split(","))
+    else:
+        # 开发环境默认允许前端端口
+        cors_allow_origins = ("http://localhost:5175", "http://127.0.0.1:5175")
 
     # 装配依赖（Web 需要 event bus 支持 SSE）
     (
@@ -88,6 +91,11 @@ def run_web_command(args: object) -> int:
 
     # 构建 api key config service
     api_key_config_service = _build_api_key_config_service(workspace_dir)
+
+    # 将已保存的 API keys 加载到环境变量（确保 ConfigLoader 能正确读取）
+    loaded_keys = api_key_config_service.load_all_keys_to_environment()
+    if loaded_keys > 0:
+        Log.info(f"已从配置文件加载 {loaded_keys} 个 API keys 到环境变量", module=_MODULE)
 
     # 构建 fins service
     from dayu.services.fins_service import FinsService

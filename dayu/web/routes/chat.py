@@ -5,9 +5,28 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from pydantic import BaseModel
+
 from dayu.contracts.events import AppEventType
 from dayu.services.contracts import ChatTurnRequest, ChatTurnSubmission, ReplyDeliverySubmitRequest
 from dayu.services.protocols import ChatServiceProtocol, ReplyDeliveryServiceProtocol
+
+
+class ChatRequest(BaseModel):
+    """Chat turn 请求体。"""
+
+    user_text: str
+    ticker: str | None = None
+    scene_name: str | None = None
+    session_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    """Chat turn 响应（异步模式，返回 session 句柄）。"""
+
+    session_id: str
+    run_id: str
+    accepted: bool = True
 
 
 class _InvalidChatSubmissionError(Exception):
@@ -43,28 +62,19 @@ def create_chat_router(
 ):
     """创建 chat 路由。"""
 
-    from fastapi import APIRouter, HTTPException
-    from pydantic import BaseModel
+    from fastapi import APIRouter, Body, HTTPException
 
     router = APIRouter(prefix="/api", tags=["chat"])
 
-    class ChatRequest(BaseModel):
-        """Chat turn 请求体。"""
-
-        user_text: str
-        ticker: str | None = None
-        scene_name: str | None = None
-        session_id: str | None = None
-
-    class ChatResponse(BaseModel):
-        """Chat turn 响应（异步模式，返回 session 句柄）。"""
-
-        session_id: str
-        accepted: bool = True
-
     @router.post("/chat", response_model=ChatResponse, status_code=202)
-    async def submit_chat_turn(body: ChatRequest) -> ChatResponse:
+    async def submit_chat_turn(body: ChatRequest = Body(...)) -> ChatResponse:
         """提交 chat turn，结果通过 SSE 推送。"""
+
+        from dayu.log import Log
+        Log.info(
+            f"chat.submit_chat_turn: 收到请求, user_text={body.user_text[:50] if body.user_text else 'None'}, scene={body.scene_name or 'default'}, session_id={body.session_id or 'None'}",
+            module="WEB.CHAT",
+        )
 
         request = ChatTurnRequest(
             session_id=body.session_id,
@@ -82,6 +92,12 @@ def create_chat_router(
             validated_submission = _require_chat_submission(submission)
         except _InvalidChatSubmissionError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        Log.info(
+            f"chat.submit_chat_turn: 提交成功, session_id={validated_submission.session_id}",
+            module="WEB.CHAT",
+        )
+
         asyncio.create_task(
             _consume_stream(
                 validated_submission.event_stream,
@@ -90,7 +106,11 @@ def create_chat_router(
                 scene_name=body.scene_name,
             )
         )
-        return ChatResponse(session_id=validated_submission.session_id)
+        # 使用 session_id 作为 run_id（与 upload 路由一致）
+        return ChatResponse(
+            session_id=validated_submission.session_id,
+            run_id=validated_submission.session_id,
+        )
 
     return router
 

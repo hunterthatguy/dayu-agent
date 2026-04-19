@@ -212,7 +212,7 @@ class TestSubscriptionLifecycle:
 
         assert accepted is False
         warning_mock.assert_called_once_with(
-            "事件队列溢出，丢弃旧事件: run_id=run_1",
+            "事件队列溢出，丢弃旧事件: session_id=None, queue_size=1",
             module="HOST.EVENT_BUS",
         )
 

@@ -233,5 +233,25 @@ class ApiKeyConfigService:
             return True
         return bool(self.get_api_key(key_name))
 
+    def load_all_keys_to_environment(self) -> int:
+        """将所有已保存的 API keys 加载到当前进程环境变量。
+
+        用于服务器启动时，从 JSON 文件读取已配置的 keys 并注入到 os.environ，
+        确保 ConfigLoader 能正确替换 {{API_KEY}} 占位符。
+
+        Returns:
+            成功加载的 key 数量。
+
+        Raises:
+            无。
+        """
+        file_keys = self._read_keys_from_file()
+        loaded_count = 0
+        for key_name, value in file_keys.items():
+            if key_name in _CONFIGURABLE_KEYS and value.strip():
+                os.environ[key_name] = value.strip()
+                loaded_count += 1
+        return loaded_count
+
 
 __all__ = ["ApiKeyConfigService"]

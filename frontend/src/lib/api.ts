@@ -11,6 +11,8 @@ import type {
   ScenePromptCompositionView,
   ManualUploadResponse,
   FileUploadResponse,
+  ProcessTriggerResponse,
+  AnalyzeTriggerResponse,
   ChatTurnSubmission,
   ChatTurnResponse,
   ApiKeyStatusResponse,
@@ -144,7 +146,6 @@ export const api = {
       for (let i = 0; i < files.length; i++) {
         formData.append("files", files[i]);
       }
-      // FormData 不需要手动设置 Content-Type
       const resp = await fetch(
         `${BASE}/api/upload/files?ticker=${encodeURIComponent(ticker)}`,
         {
@@ -162,6 +163,18 @@ export const api = {
       return (await resp.json()) as FileUploadResponse;
     },
 
+    triggerProcess: (body: { ticker: string; session_id: string }) =>
+      request<ProcessTriggerResponse>("/api/upload/process", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+
+    triggerAnalyze: (body: { ticker: string; session_id: string; document_id?: string }) =>
+      request<AnalyzeTriggerResponse>("/api/upload/analyze", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+
     getProgressUrl: (runId: string, ticker: string, sessionId: string) =>
       `${BASE}/api/upload/progress/${runId}?ticker=${encodeURIComponent(ticker)}&session_id=${encodeURIComponent(sessionId)}`,
   },
@@ -173,8 +186,9 @@ export const api = {
         body: JSON.stringify(body),
       }),
 
-    getRunEventsUrl: (runId: string) =>
-      `${BASE}/api/runs/${runId}/events`,
+    // SSE 端点直接连接后端端口 9000（绕过 Vite 代理）
+    getSessionEventsUrl: (sessionId: string) =>
+      `http://localhost:9000/api/sessions/${sessionId}/events`,
   },
 
   settings: {

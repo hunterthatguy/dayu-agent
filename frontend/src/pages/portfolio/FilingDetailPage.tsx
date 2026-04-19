@@ -91,12 +91,24 @@ export default function FilingDetailPage() {
 
         {tab === "original" && detail.filing.primary_document && (
           <div className="bg-white rounded-md border border-zinc-200 p-4">
+            <div className="mb-2 text-sm text-zinc-500">
+              预览文件: {detail.filing.primary_document}
+            </div>
             <iframe
-              src={api.portfolio.getFilingFileUrl(ticker, documentId, detail.filing.primary_document)}
-              sandbox="allow-same-origin"
-              className="w-full h-64 border-0"
+              src={`${api.portfolio.getFilingFileUrl(ticker, documentId, detail.filing.primary_document)}?preview=true`}
+              className="w-full h-[600px] border-0 rounded"
               title="原文预览"
             />
+            <div className="mt-2 text-xs text-zinc-400">
+              如预览失败，可点击下方链接下载文件
+            </div>
+            <a
+              href={api.portfolio.getFilingFileUrl(ticker, documentId, detail.filing.primary_document)}
+              className="text-xs text-zinc-600 hover:text-zinc-900"
+              download
+            >
+              下载原文件
+            </a>
           </div>
         )}
 

@@ -1122,10 +1122,23 @@ def _build_default_host_components(
         model_catalog=model_catalog,
         default_execution_options=default_execution_options,
     )
+
+    # 当启用 event_bus 时，使用 Host 内部的 run_registry 以正确解析 session_id
+    effective_event_bus = event_bus
+    if effective_event_bus is not None:
+        from dayu.host.event_bus import AsyncQueueEventBus
+        if isinstance(effective_event_bus, AsyncQueueEventBus):
+            # 更新 run_registry 引用以正确解析 run → session 关系
+            effective_event_bus._run_registry = run_registry
+            Log.info(
+                f"Host._build_default_host_components: 已注入 run_registry 到 EventBus, registry_id={id(run_registry)}",
+                module=MODULE,
+            )
+
     executor = DefaultHostExecutor(
         run_registry=run_registry,
         concurrency_governor=concurrency_governor,
-        event_bus=event_bus,
+        event_bus=effective_event_bus,
         scene_preparation=scene_preparation,
         pending_turn_store=pending_turn_store,
     )

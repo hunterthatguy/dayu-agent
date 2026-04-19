@@ -199,6 +199,22 @@ export interface FileUploadResponse {
   files_received: number;
 }
 
+// === Pipeline Stage Trigger ===
+
+export interface ProcessTriggerResponse {
+  run_id: string;
+  session_id: string;
+  ticker: string;
+}
+
+export interface AnalyzeTriggerResponse {
+  ticker: string;
+  document_id: string;
+  metrics_count: number;
+  summary: string;
+  insights: string[];
+}
+
 // === Chat ===
 
 export interface ChatTurnSubmission {

@@ -656,16 +656,13 @@ def _prepare_cli_host_dependencies(
     )
 
     # 构建事件总线（Web SSE 需要）
+    # 注意：不在这里创建 RunRegistry，让 Host 内部创建并正确注入
     event_bus = None
     if enable_event_bus:
-        from dayu.host.host_store import HostStore
-        from dayu.host.run_registry import SQLiteRunRegistry
         from dayu.host.event_bus import AsyncQueueEventBus
 
-        host_store = HostStore(host_config.store_path)
-        host_store.initialize_schema()
-        run_registry = SQLiteRunRegistry(host_store)
-        event_bus = AsyncQueueEventBus(run_registry=run_registry)
+        # 创建不带 run_registry 的 EventBus，Host 会正确注入
+        event_bus = AsyncQueueEventBus(run_registry=None)
 
     host = Host(
         workspace=workspace,

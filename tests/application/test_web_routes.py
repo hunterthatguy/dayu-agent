@@ -210,9 +210,14 @@ async def _single_fins_stream():
 def _install_fake_route_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     """安装用于 route handler 单测的 fastapi/pydantic 测试桩。"""
 
+    def _fake_body(obj: object = None) -> object:
+        """最小 Body 测试桩 - 返回参数自身用于测试桩直接调用。"""
+        return obj
+
     fake_fastapi = ModuleType("fastapi")
     cast(Any, fake_fastapi).APIRouter = _CapturingRouter
     cast(Any, fake_fastapi).HTTPException = _FakeHTTPException
+    cast(Any, fake_fastapi).Body = _fake_body
     fake_fastapi_responses = ModuleType("fastapi.responses")
     cast(Any, fake_fastapi_responses).StreamingResponse = _FakeStreamingResponse
     fake_pydantic = ModuleType("pydantic")
@@ -520,9 +525,10 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
     monkeypatch.setattr("dayu.web.fastapi_app.create_portfolio_router", _capture_single("portfolio"))
     monkeypatch.setattr("dayu.web.fastapi_app.create_config_router", _capture_single("config"))
 
-    def _capture_upload(fins_service: object, host_admin_service: object) -> object:
+    def _capture_upload(fins_service: object, host_admin_service: object, portfolio_browsing_service: object) -> object:
         captured_calls.append(("upload_fins", fins_service))
         captured_calls.append(("upload_host", host_admin_service))
+        captured_calls.append(("upload_portfolio", portfolio_browsing_service))
         return "upload_router"
 
     monkeypatch.setattr("dayu.web.fastapi_app.create_upload_router", _capture_upload)
@@ -571,6 +577,7 @@ def test_create_fastapi_app_injects_narrow_services_into_route_factories(
         ("config", scene_config_service),
         ("upload_fins", fins_service),
         ("upload_host", host_admin_service),
+        ("upload_portfolio", portfolio_browsing_service),
         ("settings_api_key", api_key_config_service),
         ("settings_scene_config", scene_config_service),
     ]
@@ -993,7 +1000,7 @@ def test_events_router_streams_run_events_as_sse(monkeypatch: pytest.MonkeyPatch
     async def _run_events() -> AsyncIterator[AppEvent]:
         """生成测试用 run 事件流。"""
 
-        yield AppEvent(type=AppEventType.CONTENT_DELTA, payload={"text": "hello"})
+        yield AppEvent(type=AppEventType.CONTENT_DELTA, payload="hello")
 
     class _HostAdminService:
         def subscribe_run_events(self, run_id: str) -> AsyncIterator[AppEvent]:
@@ -1010,7 +1017,8 @@ def test_events_router_streams_run_events_as_sse(monkeypatch: pytest.MonkeyPatch
     chunks = asyncio.run(_collect_text_chunks(typed_response.body_iterator))
 
     assert typed_response.media_type == "text/event-stream"
-    assert chunks == ['data: {"type": "content_delta", "payload": {"text": "hello"}}\n\n']
+    # delta 事件会被批量合并，payload 是字符串
+    assert chunks == ['data: {"type": "content_delta", "payload": "hello"}\n\n']
 
 
 @pytest.mark.unit

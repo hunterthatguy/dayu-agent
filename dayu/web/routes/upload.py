@@ -3,11 +3,14 @@
 该路由封装 ``FinsService`` 与 ``HostAdminService`` 能力，向 UI 暴露统一上传入口：
 - POST /api/upload/manual：触发 download 或 process 流水线
 - POST /api/upload/files：上传本地财报文件
+- POST /api/upload/process：触发解析与抽取阶段（手动触发下一阶段）
+- POST /api/upload/analyze：触发维度分析阶段（手动触发下一阶段）
 - GET /api/upload/progress/{run_id}：SSE 进度流（聚合 fins 事件）
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import tempfile
@@ -26,11 +29,17 @@ from dayu.contracts.fins import (
     FinsEvent,
     FinsEventType,
     FinsProgressEventName,
+    FinsResult,
+    ProcessCommandPayload,
     UploadFilingsFromCommandPayload,
 )
 from dayu.services.contracts import FinsSubmitRequest, PipelineProgressView
-from dayu.services.protocols import FinsServiceProtocol, HostAdminServiceProtocol
+from dayu.services.protocols import FinsServiceProtocol, HostAdminServiceProtocol, PortfolioBrowsingServiceProtocol
 from dayu.services.pipeline_progress_projector import PipelineProgressProjector
+from dayu.services.dimension_analysis_service import DimensionAnalysisService
+from dayu.log import Log
+
+_MODULE = "upload_routes"
 
 
 # === 请求/响应模型（模块级别定义，避免 FastAPI ForwardRef 问题） ===
@@ -66,9 +75,43 @@ class FileUploadResponse(BaseModel):
     files_received: int
 
 
+class ProcessTriggerRequest(BaseModel):
+    """触发process阶段请求。"""
+
+    ticker: str
+    session_id: str
+
+
+class ProcessTriggerResponse(BaseModel):
+    """触发process阶段响应。"""
+
+    run_id: str
+    session_id: str
+    ticker: str
+
+
+class AnalyzeTriggerRequest(BaseModel):
+    """触发analyze阶段请求。"""
+
+    ticker: str
+    session_id: str
+    document_id: str | None = None  # 可选，默认分析最新的processed document
+
+
+class AnalyzeTriggerResponse(BaseModel):
+    """触发analyze阶段响应。"""
+
+    ticker: str
+    document_id: str
+    metrics_count: int
+    summary: str
+    insights: list[str]
+
+
 def create_upload_router(
     fins_service: FinsServiceProtocol,
     host_admin_service: HostAdminServiceProtocol,
+    portfolio_browsing_service: PortfolioBrowsingServiceProtocol | None = None,
 ) -> Any:
     """创建 upload 路由。
 
@@ -113,23 +156,40 @@ def create_upload_router(
         )
         current = projector.initial()
 
+        Log.info(f"SSE 连接建立: session_id={session_id}", module=_MODULE)
+
         # 订阅 session 事件流（因为 run_id 实际是 session_id）
         stream = host_admin_service.subscribe_session_events(session_id)
 
         # 发送初始状态
+        Log.debug(f"SSE 发送初始状态: session_id={session_id}", module=_MODULE)
         yield f"data: {json.dumps(_view_to_dict(current), ensure_ascii=False)}\n\n"
 
+        event_count = 0
         async for event in stream:
+            event_count += 1
             # 从 PublishedRunEventProtocol 提取 payload
             payload = event.payload
+            Log.debug(
+                f"SSE 收到事件 #{event_count}: session_id={session_id}, payload_type={type(payload).__name__}",
+                module=_MODULE,
+            )
             if isinstance(payload, (FinsEvent, AppEvent)):
                 updated = projector.apply(current, payload)
                 if updated != current:
                     current = updated
+                    Log.debug(
+                        f"SSE 发送更新: session_id={session_id}, active_stage={current.active_stage_key}, terminal={current.terminal_state}",
+                        module=_MODULE,
+                    )
                     yield f"data: {json.dumps(_view_to_dict(current), ensure_ascii=False)}\n\n"
 
             # 终态后停止
             if current.terminal_state in ("succeeded", "failed", "cancelled"):
+                Log.info(
+                    f"SSE 流结束: session_id={session_id}, total_events={event_count}, terminal_state={current.terminal_state}",
+                    module=_MODULE,
+                )
                 break
 
     def _view_to_dict(view: PipelineProgressView) -> dict[str, Any]:
@@ -154,6 +214,28 @@ def create_upload_router(
             "terminal_state": view.terminal_state,
             "updated_at": view.updated_at,
         }
+
+    # === 后台任务驱动器 ===
+
+    async def _drive_execution(execution: AsyncIterator[FinsEvent], session_id: str) -> None:
+        """在后台驱动 Fins execution 流，确保事件发布到 event bus。
+
+        Args:
+            execution: Fins 流式 execution（异步生成器）。
+            session_id: 会话 ID（用于日志）。
+
+        Raises:
+            无（错误仅记录日志）。
+        """
+
+        try:
+            async for _event in execution:
+                # 迭代 execution 驱动流水线执行
+                # 事件已由 Host executor 发布到 event bus，无需额外处理
+                pass
+            Log.info(f"Fins 流水线完成: session_id={session_id}", module=_MODULE)
+        except Exception as exc:
+            Log.error(f"Fins 流水线异常: session_id={session_id}, error={exc}", module=_MODULE)
 
     # === 路由端点 ===
 
@@ -183,6 +265,11 @@ def create_upload_router(
 
         # 提交到 fins 服务
         submission = fins_service.submit(FinsSubmitRequest(command=command))
+
+        # 启动后台任务驱动 execution 流
+        execution = submission.execution
+        assert not isinstance(execution, FinsResult), "stream=True 应返回 AsyncIterator"
+        asyncio.create_task(_drive_execution(execution, submission.session_id))
 
         return ManualUploadResponse(
             run_id=submission.session_id,  # 暂用 session_id 作为 run_id 标识
@@ -251,6 +338,11 @@ def create_upload_router(
             # 提交到 fins 服务
             submission = fins_service.submit(FinsSubmitRequest(command=command))
 
+            # 启动后台任务驱动 execution 流
+            execution = submission.execution
+            assert not isinstance(execution, FinsResult), "stream=True 应返回 AsyncIterator"
+            asyncio.create_task(_drive_execution(execution, submission.session_id))
+
             return FileUploadResponse(
                 run_id=submission.session_id,
                 session_id=submission.session_id,
@@ -273,6 +365,92 @@ def create_upload_router(
         return StreamingResponse(
             _progress_generator(run_id, ticker, session_id),
             media_type="text/event-stream",
+        )
+
+    # === 分阶段触发端点 ===
+
+    @router.post("/process", response_model=ProcessTriggerResponse, status_code=202)
+    async def trigger_process(body: ProcessTriggerRequest = Body(...)) -> ProcessTriggerResponse:
+        """手动触发解析与抽取阶段。
+
+        在download完成后，用户可点击触发process阶段。
+        """
+
+        ticker = body.ticker.strip().upper()
+        if not ticker:
+            raise HTTPException(status_code=400, detail="ticker 不能为空")
+
+        Log.info(f"触发process阶段: ticker={ticker}, session_id={body.session_id}", module=_MODULE)
+
+        # 构建process命令（处理该ticker下所有已下载的filings）
+        command = FinsCommand(
+            name=FinsCommandName.PROCESS,
+            payload=ProcessCommandPayload(
+                ticker=ticker,
+                document_ids=(),  # 空表示处理所有未处理的
+                overwrite=False,
+            ),
+            stream=True,
+        )
+
+        submission = fins_service.submit(FinsSubmitRequest(command=command))
+
+        execution = submission.execution
+        assert not isinstance(execution, FinsResult), "stream=True 应返回 AsyncIterator"
+        asyncio.create_task(_drive_execution(execution, submission.session_id))
+
+        return ProcessTriggerResponse(
+            run_id=submission.session_id,
+            session_id=submission.session_id,
+            ticker=ticker,
+        )
+
+    @router.post("/analyze", response_model=AnalyzeTriggerResponse, status_code=200)
+    async def trigger_analyze(body: AnalyzeTriggerRequest = Body(...)) -> AnalyzeTriggerResponse:
+        """手动触发维度分析阶段。
+
+        在process完成后，用户可点击触发analyze阶段。
+        分析已处理的财报数据，提取财务指标并生成洞察。
+        """
+
+        ticker = body.ticker.strip().upper()
+        if not ticker:
+            raise HTTPException(status_code=400, detail="ticker 不能为空")
+
+        if portfolio_browsing_service is None:
+            raise HTTPException(status_code=500, detail="portfolio browsing service 未配置")
+
+        Log.info(f"触发analyze阶段: ticker={ticker}, document_id={body.document_id or 'auto'}", module=_MODULE)
+
+        # 获取最新的processed document
+        if body.document_id:
+            document_id = body.document_id
+        else:
+            # 获取最新处理的文档
+            processed_list = portfolio_browsing_service.list_processed_artifacts(ticker)
+            if not processed_list:
+                raise HTTPException(status_code=404, detail="未找到已处理的财报数据，请先执行解析与抽取阶段")
+            document_id = processed_list[0].document_id
+
+        # 获取processed数据（包含XBRL facts）
+        processed_view = portfolio_browsing_service.get_filing_processed(ticker, document_id)
+
+        # 执行维度分析
+        analysis_service = DimensionAnalysisService()
+        result = analysis_service.analyze(
+            ticker=ticker,
+            document_id=document_id,
+            processed_data={
+                "xbrl_facts": [fact.__dict__ for fact in processed_view.xbrl_facts],
+            },
+        )
+
+        return AnalyzeTriggerResponse(
+            ticker=ticker,
+            document_id=document_id,
+            metrics_count=len(result.metrics),
+            summary=result.summary,
+            insights=list(result.insights),
         )
 
     return router

@@ -135,6 +135,10 @@ class DefaultHostExecutor(HostExecutorProtocol):
             scene_name=spec.scene_name,
             metadata=dict(spec.metadata),
         )
+        Log.debug(
+            f"Executor.register_run: run_id={run.run_id}, session_id={spec.session_id or 'None'}, publish_events={spec.publish_events}",
+            module=MODULE,
+        )
         context, bridge, deadline_watcher, permit = self._start_run(spec=spec, run_id=run.run_id)
         try:
             async for event in event_stream_factory(context):
@@ -220,6 +224,10 @@ class DefaultHostExecutor(HostExecutorProtocol):
             service_type=spec.operation_name,
             scene_name=spec.scene_name,
             metadata=dict(spec.metadata),
+        )
+        Log.info(
+            f"Executor.run_agent_stream: 注册 run, run_id={run.run_id}, session_id={spec.session_id or 'None'}",
+            module=MODULE,
         )
         context, bridge, deadline_watcher, permit = self._start_run(spec=spec, run_id=run.run_id)
         pending_turn_id = self._register_accepted_pending_turn(
@@ -566,7 +574,14 @@ class DefaultHostExecutor(HostExecutorProtocol):
         """
 
         if self.event_bus is None:
+            Log.debug(f"Executor._publish_event: event_bus is None, skipping", module=MODULE)
             return
+
+        event_type = getattr(event.type, 'value', str(event.type))
+        Log.info(
+            f"Executor._publish_event: 发布事件, run_id={run_id}, event_type={event_type}",
+            module=MODULE,
+        )
         self.event_bus.publish(run_id, event)
 
     def _publish_cancelled_app_event(self, *, run_id: str, run: RunRecord | None) -> AppEvent:

@@ -414,17 +414,26 @@ def create_portfolio_router(service: PortfolioBrowsingServiceProtocol) -> Any:
         ticker: str = Path(description="股票代码"),
         document_id: str = Path(description="文档 ID"),
         filename: str = Path(description="文件名"),
+        preview: bool = Query(default=False, description="是否预览模式（inline）"),
     ) -> Response:
-        """下载 filing 文件。"""
+        """下载或预览 filing 文件。"""
 
         try:
             blob = service.read_filing_file(ticker, document_id, filename)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        # 预览模式：PDF/HTML/图片使用 inline，其他使用 attachment
+        disposition = "attachment"
+        if preview:
+            content_type = blob.content_type or ""
+            if content_type.startswith(("application/pdf", "text/html", "image/")):
+                disposition = "inline"
+
         return Response(
             content=blob.content,
             media_type=blob.content_type,
-            headers={"Content-Disposition": f"attachment; filename={blob.filename}"},
+            headers={"Content-Disposition": f"{disposition}; filename={blob.filename}"},
         )
 
     return router

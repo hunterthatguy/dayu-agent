@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 import json
@@ -9,6 +10,11 @@ from typing import Any, cast
 
 from dayu.contracts.events import PublishedRunEventProtocol
 from dayu.services.protocols import HostAdminServiceProtocol
+
+
+from dayu.log import Log
+
+_MODULE = "WEB.EVENTS"
 
 
 def _normalize_event_payload(payload: object) -> object:
@@ -68,11 +74,15 @@ def create_events_router(host_admin_service: HostAdminServiceProtocol):
 
     router = APIRouter(prefix="/api", tags=["events"])
 
+    # 批量合并 delta 事件的配置
+    _DELTA_BATCH_SIZE = 32  # 每 32 个 delta 事件合并一次
+    _DELTA_BATCH_TIMEOUT_MS = 100  # 或每 100ms 发送一次
+
     async def _sse_generator(stream):
-        """将事件流转为 SSE 文本流。
+        """将事件流转为 SSE 文本流，合并 delta 事件减少发送频率。
 
         Args:
-            stream: 应用层事件流。
+            stream: 应用层事件流（Subscription 对象）。
 
         Yields:
             SSE 文本片段。
@@ -81,9 +91,95 @@ def create_events_router(host_admin_service: HostAdminServiceProtocol):
             无。
         """
 
-        async for event in stream:
-            data = json.dumps(_build_sse_event_payload(event), ensure_ascii=False)
-            yield f"data: {data}\n\n"
+        Log.info(
+            f"SSE._sse_generator: generator 启动, 等待第一个事件",
+            module=_MODULE,
+        )
+
+        delta_buffer: list[str] = []
+        delta_type: str | None = None
+        last_flush_time = asyncio.get_event_loop().time()
+        event_count = 0
+
+        try:
+            # 首先尝试获取第一个事件，确认 stream 正常工作
+            Log.info(
+                f"SSE._sse_generator: 开始 async for 迭代",
+                module=_MODULE,
+            )
+
+            async for event in stream:
+                event_count += 1
+                event_type = _normalize_event_discriminator(event.type)
+
+                Log.info(
+                    f"SSE._sse_generator: 收到事件 #{event_count}, type={event_type}",
+                    module=_MODULE,
+                )
+
+                # delta 类型事件（content_delta, reasoning_delta）合并发送
+                if event_type in ("content_delta", "reasoning_delta"):
+                    delta_text = str(event.payload or "")
+                    if delta_text:
+                        delta_buffer.append(delta_text)
+                        # 优先使用 content_delta，因为 reasoning_delta 通常是思考内容
+                        if delta_type is None or event_type == "content_delta":
+                            delta_type = event_type
+
+                        # 达到批量大小或超时，发送合并事件
+                        now = asyncio.get_event_loop().time()
+                        should_flush = (
+                            len(delta_buffer) >= _DELTA_BATCH_SIZE or
+                            (now - last_flush_time) * 1000 >= _DELTA_BATCH_TIMEOUT_MS
+                        )
+
+                        if should_flush and delta_buffer:
+                            merged_text = "".join(delta_buffer)
+                            data = json.dumps({
+                                "type": delta_type or "content_delta",
+                                "payload": merged_text,
+                            }, ensure_ascii=False)
+                            yield f"data: {data}\n\n"
+                            delta_buffer = []
+                            delta_type = None
+                            last_flush_time = now
+                else:
+                    # 非 delta 事件，先发送已缓冲的 delta，然后发送当前事件
+                    if delta_buffer:
+                        merged_text = "".join(delta_buffer)
+                        data = json.dumps({
+                            "type": delta_type or "content_delta",
+                            "payload": merged_text,
+                        }, ensure_ascii=False)
+                        yield f"data: {data}\n\n"
+                        delta_buffer = []
+                        delta_type = None
+                        last_flush_time = asyncio.get_event_loop().time()
+
+                    # 发送当前事件（保持原有格式）
+                    data = json.dumps(_build_sse_event_payload(event), ensure_ascii=False)
+                    yield f"data: {data}\n\n"
+
+            # 流结束时，发送剩余的 delta
+            if delta_buffer:
+                merged_text = "".join(delta_buffer)
+                data = json.dumps({
+                    "type": delta_type or "content_delta",
+                    "payload": merged_text,
+                }, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+
+            Log.info(
+                f"SSE._sse_generator: 流结束, total_events={event_count}",
+                module=_MODULE,
+            )
+
+        except asyncio.CancelledError:
+            Log.info(
+                f"SSE._sse_generator: 被取消, total_events={event_count}",
+                module=_MODULE,
+            )
+            raise
 
     @router.get("/runs/{run_id}/events")
     async def run_events(run_id: str):
@@ -102,10 +198,25 @@ def create_events_router(host_admin_service: HostAdminServiceProtocol):
     async def session_events(session_id: str):
         """订阅 session 下所有 run 的实时事件。"""
 
+        Log.info(
+            f"events.session_events: 收到 SSE 连接请求, session_id={session_id}",
+            module=_MODULE,
+        )
+
         try:
             stream = host_admin_service.subscribe_session_events(session_id)
         except RuntimeError as exc:
+            Log.warning(
+                f"events.session_events: 订阅失败, session_id={session_id}, error={str(exc)}",
+                module=_MODULE,
+            )
             raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+        Log.info(
+            f"events.session_events: SSE 连接建立, 开始生成事件流, session_id={session_id}",
+            module=_MODULE,
+        )
+
         return StreamingResponse(
             _sse_generator(stream),
             media_type="text/event-stream",

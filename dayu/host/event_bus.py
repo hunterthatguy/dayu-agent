@@ -15,8 +15,18 @@ from dayu.log import Log
 
 MODULE = "HOST.EVENT_BUS"
 
-# 每个 subscriber 的队列默认容量
-_DEFAULT_QUEUE_MAX_SIZE = 256
+# 每个 subscriber 的队列默认容量（增大以支持 thinking 模式的大量 reasoning_delta 事件）
+_DEFAULT_QUEUE_MAX_SIZE = 4096
+
+
+def _normalize_event_discriminator(value: object) -> str:
+    """把事件判别字段规范化为稳定字符串。"""
+
+    from enum import Enum
+
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
 
 
 class _Subscription:
@@ -83,9 +93,11 @@ class _Subscription:
         """
 
         if self._closed:
+            Log.debug(f"Subscription.try_put: 已关闭，跳过", module=MODULE)
             return False
         try:
             self._queue.put_nowait(event)
+            Log.debug(f"Subscription.try_put: 成功放入事件，queue_size={self._queue.qsize()}", module=MODULE)
             return True
         except asyncio.QueueFull:
             # 慢消费者：丢弃最旧的，放入新的
@@ -97,18 +109,53 @@ class _Subscription:
                 self._queue.put_nowait(event)
             except asyncio.QueueFull:
                 pass
-            Log.warning(f"事件队列溢出，丢弃旧事件: run_id={self._run_id}", module=MODULE)
+            Log.warning(
+                f"事件队列溢出，丢弃旧事件: session_id={self._session_id}, queue_size={self._queue.maxsize}",
+                module=MODULE,
+            )
             return False
 
     async def __aiter__(self) -> AsyncIterator[PublishedRunEventProtocol]:
         """异步迭代订阅事件。"""
 
-        while True:
-            event = await self._queue.get()
-            if event is None:
-                # sentinel 表示订阅已关闭
-                break
-            yield event
+        Log.info(
+            f"Subscription.__aiter__: 开始迭代, session_id={self._session_id}, queue_size={self._queue.qsize()}",
+            module=MODULE,
+        )
+        event_count = 0
+        try:
+            while True:
+                # 使用超时避免客户端断开后无限等待
+                try:
+                    event = await asyncio.wait_for(self._queue.get(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    # 30秒无事件，发送心跳保持连接
+                    Log.info(
+                        f"Subscription.__aiter__: 30s 无事件（心跳）, session_id={self._session_id}, consumed={event_count}",
+                        module=MODULE,
+                    )
+                    continue
+
+                if event is None:
+                    # sentinel 表示订阅已关闭
+                    Log.info(
+                        f"Subscription.__aiter__: 收到 sentinel 结束, session_id={self._session_id}, consumed={event_count}",
+                        module=MODULE,
+                    )
+                    break
+                event_count += 1
+                event_type = _normalize_event_discriminator(event.type)
+                Log.info(
+                    f"Subscription.__aiter__: yield #{event_count}, type={event_type}, session_id={self._session_id}",
+                    module=MODULE,
+                )
+                yield event
+        except asyncio.CancelledError:
+            Log.info(
+                f"Subscription.__aiter__: 被取消, session_id={self._session_id}, consumed={event_count}",
+                module=MODULE,
+            )
+            raise
 
 
 class AsyncQueueEventBus(RunEventBusProtocol):
@@ -137,15 +184,27 @@ class AsyncQueueEventBus(RunEventBusProtocol):
         with self._lock:
             subs = list(self._subscriptions)
 
+        event_type = _normalize_event_discriminator(event.type)
+        Log.info(
+            f"EventBus.publish: 收到事件, run_id={run_id}, event_type={event_type}, total_subs={len(subs)}",
+            module=MODULE,
+        )
+
         session_id: str | None = None
         session_id_resolved = False
+        matched_count = 0
 
         for sub in subs:
             if sub.is_closed:
+                Log.debug(f"EventBus.publish: sub closed, skipping", module=MODULE)
                 continue
 
             # 精确 run_id 匹配
             if sub.run_id is not None and sub.run_id != run_id:
+                Log.debug(
+                    f"EventBus.publish: run_id mismatch, sub.run_id={sub.run_id}, event.run_id={run_id}",
+                    module=MODULE,
+                )
                 continue
 
             # session_id 匹配：需要通过 RunRegistry 解析
@@ -154,9 +213,29 @@ class AsyncQueueEventBus(RunEventBusProtocol):
                     session_id = self._resolve_session_id(run_id)
                     session_id_resolved = True
                 if sub.session_id != session_id:
+                    Log.info(
+                        f"EventBus.publish: session不匹配, sub.session={sub.session_id}, resolved_session={session_id or 'None'}, run_id={run_id}",
+                        module=MODULE,
+                    )
                     continue
 
-            sub.try_put(event)
+            matched_count += 1
+            success = sub.try_put(event)
+            Log.info(
+                f"EventBus.publish: 事件放入队列成功, sub.session={sub.session_id}, matched_count={matched_count}",
+                module=MODULE,
+            )
+
+        if matched_count == 0:
+            Log.warning(
+                f"EventBus.publish: 无匹配订阅者! run_id={run_id}, event_type={event_type}, total_subs={len(subs)}, resolved_session={session_id or '未解析'}",
+                module=MODULE,
+            )
+        else:
+            Log.info(
+                f"EventBus.publish: 发布完成, run_id={run_id}, matched_subs={matched_count}",
+                module=MODULE,
+            )
 
     def subscribe(
         self,
@@ -169,6 +248,11 @@ class AsyncQueueEventBus(RunEventBusProtocol):
         sub = _Subscription(run_id=run_id, session_id=session_id)
         with self._lock:
             self._subscriptions.append(sub)
+            total = len(self._subscriptions)
+        Log.info(
+            f"EventBus.subscribe: 创建新订阅, session_id={session_id or 'None'}, run_id={run_id or 'None'}, total_subs={total}",
+            module=MODULE,
+        )
         return sub  # _Subscription 结构匹配 EventSubscription 协议
 
     def _cleanup_closed(self) -> None:
@@ -188,11 +272,24 @@ class AsyncQueueEventBus(RunEventBusProtocol):
         """
 
         if self._run_registry is None:
+            Log.warning(
+                f"EventBus._resolve_session_id: run_registry 为 None! 无法解析 run_id={run_id}",
+                module=MODULE,
+            )
             return None
         run = self._run_registry.get_run(run_id)
         if run is None:
+            Log.warning(
+                f"EventBus._resolve_session_id: run_id={run_id} 不存在于 registry!",
+                module=MODULE,
+            )
             return None
-        return run.session_id
+        session_id = run.session_id
+        Log.info(
+            f"EventBus._resolve_session_id: 解析成功, run_id={run_id} -> session_id={session_id or 'None'}",
+            module=MODULE,
+        )
+        return session_id
 
 
 __all__ = ["AsyncQueueEventBus"]

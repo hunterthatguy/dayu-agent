@@ -100,7 +100,7 @@ def create_fastapi_app(
     app.include_router(create_fins_router(fins_service))
     app.include_router(create_portfolio_router(portfolio_browsing_service))
     app.include_router(create_config_router(scene_config_service))
-    app.include_router(create_upload_router(fins_service, host_admin_service))
+    app.include_router(create_upload_router(fins_service, host_admin_service, portfolio_browsing_service))
     app.include_router(create_settings_router(api_key_config_service, scene_config_service))
 
     # 静态文件挂载（生产部署用）

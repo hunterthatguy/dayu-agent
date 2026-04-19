@@ -61,17 +61,17 @@ export default function ChatConsolePage() {
       }));
 
       setInputText("");
-      subscribeToEvents(response.run_id, assistantMessage.id);
+      subscribeToEvents(response.session_id, assistantMessage.id);
     },
   });
 
   // SSE 事件订阅
-  const subscribeToEvents = useCallback((runId: string, messageId: string) => {
+  const subscribeToEvents = useCallback((sessionId: string, messageId: string) => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
-    const eventSource = new EventSource(api.chat.getRunEventsUrl(runId));
+    const eventSource = new EventSource(api.chat.getSessionEventsUrl(sessionId));
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
@@ -98,24 +98,54 @@ export default function ChatConsolePage() {
   }, []);
 
   const handleAgentEvent = (event: AgentEvent, messageId: string) => {
-    if (event.type === "agent.token_delta") {
-      const token = event.payload?.token as string | undefined;
-      if (token) {
+    // 后端事件类型：content_delta, reasoning_delta, final_answer, tool_event, error, done
+    if (event.type === "content_delta") {
+      // payload 是字符串
+      const text = event.payload as string | undefined;
+      if (text) {
         setSession((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
             messages: prev.messages.map((m) =>
               m.id === messageId
-                ? { ...m, content: m.content + token }
+                ? { ...m, content: m.content + text }
                 : m,
             ),
           };
         });
       }
-    } else if (event.type === "agent.message_finish") {
+    } else if (event.type === "reasoning_delta") {
+      // reasoning/thinking 内容，合并到 content
+      const text = event.payload as string | undefined;
+      if (text) {
+        setSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.id === messageId
+                ? { ...m, content: m.content + text }
+                : m,
+            ),
+          };
+        });
+      }
+    } else if (event.type === "final_answer" || event.type === "done") {
+      // 最终答案或完成事件
       setSession((prev) => {
         if (!prev) return prev;
+        // 如果有 final_answer payload，使用它替换内容
+        if (event.type === "final_answer" && event.payload && typeof event.payload === "object") {
+          const payload = event.payload as { content?: string };
+          const finalContent = payload.content || "";
+          return {
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.id === messageId ? { ...m, content: finalContent, isStreaming: false } : m,
+            ),
+          };
+        }
         return {
           ...prev,
           messages: prev.messages.map((m) =>
@@ -124,21 +154,39 @@ export default function ChatConsolePage() {
         };
       });
       eventSourceRef.current?.close();
-    } else if (event.type === "tool.start") {
-      const toolName = (event.payload?.name as string) || "unknown";
+    } else if (event.type === "tool_event") {
+      // tool_event payload: { engine_event_type: str, data: dict }
+      const payload = event.payload as { engine_event_type?: string; data?: Record<string, unknown> } | undefined;
+      const engineEventType = payload?.engine_event_type;
+      const data = payload?.data;
+      if (engineEventType === "tool_call_start" && data) {
+        const toolName = (data.name as string) || "unknown";
+        setSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map((m) => {
+              if (m.id !== messageId) return m;
+              const toolCalls = m.toolCalls || [];
+              return { ...m, toolCalls: [...toolCalls, { name: toolName, args: {} }] };
+            }),
+          };
+        });
+      }
+    } else if (event.type === "error") {
+      const payload = event.payload as { message?: string } | undefined;
+      const errorMsg = payload?.message || "发生错误";
       setSession((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
-          messages: prev.messages.map((m) => {
-            if (m.id !== messageId) return m;
-            const toolCalls = m.toolCalls || [];
-            return { ...m, toolCalls: [...toolCalls, { name: toolName, args: {} }] };
-          }),
+          messages: prev.messages.map((m) =>
+            m.id === messageId
+              ? { ...m, content: m.content + `\n[错误: ${errorMsg}]`, isStreaming: false }
+              : m,
+          ),
         };
       });
-    } else if (event.type === "tool.finish") {
-      // 工具完成，可以更新状态
     }
   };
 
