@@ -10,10 +10,65 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Body, HTTPException, Path
 from pydantic import BaseModel
 
 from dayu.services.protocols import SceneConfigServiceProtocol
+
+
+# === 请求/响应模型（模块级别定义，避免 FastAPI ForwardRef 问题） ===
+
+class SceneModelOptionResponse(BaseModel):
+    """scene 模型选项响应。"""
+
+    model_name: str
+    is_default: bool
+
+
+class SceneMatrixRowResponse(BaseModel):
+    """scene 矩阵行响应。"""
+
+    scene_name: str
+    default_model: str
+    allowed_models: list[SceneModelOptionResponse]
+
+
+class SceneMatrixResponse(BaseModel):
+    """scene 矩阵响应。"""
+
+    all_models: list[str]
+    rows: list[SceneMatrixRowResponse]
+
+
+class PromptDocumentResponse(BaseModel):
+    """prompt 文档摘要响应。"""
+
+    category: str
+    name: str
+    relative_path: str
+    size: int
+    updated_at: str
+
+
+class PromptDocumentDetailResponse(BaseModel):
+    """prompt 文档详情响应。"""
+
+    document: PromptDocumentResponse
+    content: str
+
+
+class ScenePromptCompositionResponse(BaseModel):
+    """scene 拼接系统提示响应。"""
+
+    scene_name: str
+    composed_text: str
+    fragments: list[str]
+
+
+class UpdatePromptRequest(BaseModel):
+    """更新 prompt 请求体。"""
+
+    content: str
 
 
 def create_config_router(service: SceneConfigServiceProtocol) -> Any:
@@ -30,54 +85,6 @@ def create_config_router(service: SceneConfigServiceProtocol) -> Any:
     """
 
     router = APIRouter(prefix="/api/config", tags=["config"])
-
-    # === 响应模型 ===
-
-    class SceneModelOptionResponse(BaseModel):
-        """scene 模型选项响应。"""
-
-        model_name: str
-        is_default: bool
-
-    class SceneMatrixRowResponse(BaseModel):
-        """scene 矩阵行响应。"""
-
-        scene_name: str
-        default_model: str
-        allowed_models: list[SceneModelOptionResponse]
-
-    class SceneMatrixResponse(BaseModel):
-        """scene 矩阵响应。"""
-
-        all_models: list[str]
-        rows: list[SceneMatrixRowResponse]
-
-    class PromptDocumentResponse(BaseModel):
-        """prompt 文档摘要响应。"""
-
-        category: str
-        name: str
-        relative_path: str
-        size: int
-        updated_at: str
-
-    class PromptDocumentDetailResponse(BaseModel):
-        """prompt 文档详情响应。"""
-
-        document: PromptDocumentResponse
-        content: str
-
-    class ScenePromptCompositionResponse(BaseModel):
-        """scene 拼接系统提示响应。"""
-
-        scene_name: str
-        composed_text: str
-        fragments: list[str]
-
-    class UpdatePromptRequest(BaseModel):
-        """更新 prompt 请求体。"""
-
-        content: str
 
     # === 转换函数 ===
 
@@ -173,7 +180,7 @@ def create_config_router(service: SceneConfigServiceProtocol) -> Any:
     )
     async def update_prompt_document(
         relative_path: str = Path(description="相对路径"),
-        body: UpdatePromptRequest = None,  # type: ignore[assignment]
+        body: UpdatePromptRequest = Body(...),
     ) -> PromptDocumentDetailResponse:
         """更新 prompt 文档。"""
 

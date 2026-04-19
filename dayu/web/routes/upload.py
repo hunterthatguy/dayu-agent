@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, File, HTTPException, Path as FastApiPath, Query, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Path as FastApiPath, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -31,6 +31,39 @@ from dayu.contracts.fins import (
 from dayu.services.contracts import FinsSubmitRequest, PipelineProgressView
 from dayu.services.protocols import FinsServiceProtocol, HostAdminServiceProtocol
 from dayu.services.pipeline_progress_projector import PipelineProgressProjector
+
+
+# === 请求/响应模型（模块级别定义，避免 FastAPI ForwardRef 问题） ===
+
+class ManualUploadRequest(BaseModel):
+    """手动上传请求。
+
+    v1 MVP 仅支持 ticker 触发 download 流水线。
+    """
+
+    ticker: str
+    market: str = "US"
+    form_types: list[str] = []
+    start_date: str | None = None
+    end_date: str | None = None
+    overwrite: bool = False
+
+
+class ManualUploadResponse(BaseModel):
+    """手动上传响应。"""
+
+    run_id: str
+    session_id: str
+    ticker: str
+
+
+class FileUploadResponse(BaseModel):
+    """文件上传响应。"""
+
+    run_id: str
+    session_id: str
+    ticker: str
+    files_received: int
 
 
 def create_upload_router(
@@ -51,36 +84,6 @@ def create_upload_router(
     """
 
     router = APIRouter(prefix="/api/upload", tags=["upload"])
-
-    # === 请求/响应模型 ===
-
-    class ManualUploadRequest(BaseModel):
-        """手动上传请求。
-
-        v1 MVP 仅支持 ticker 触发 download 流水线。
-        """
-
-        ticker: str
-        market: str = "US"
-        form_types: list[str] = []
-        start_date: str | None = None
-        end_date: str | None = None
-        overwrite: bool = False
-
-    class ManualUploadResponse(BaseModel):
-        """手动上传响应。"""
-
-        run_id: str
-        session_id: str
-        ticker: str
-
-    class FileUploadResponse(BaseModel):
-        """文件上传响应。"""
-
-        run_id: str
-        session_id: str
-        ticker: str
-        files_received: int
 
     # === SSE 辅助函数 ===
 
@@ -155,7 +158,7 @@ def create_upload_router(
     # === 路由端点 ===
 
     @router.post("/manual", response_model=ManualUploadResponse, status_code=202)
-    async def manual_upload(body: ManualUploadRequest) -> ManualUploadResponse:
+    async def manual_upload(body: ManualUploadRequest = Body(...)) -> ManualUploadResponse:
         """触发 download 流水线。
 
         v1 MVP 优先实现 ticker → download 路径。

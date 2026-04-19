@@ -24,6 +24,17 @@ export class ApiError extends Error {
   }
 }
 
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    // FastAPI validation errors: [{type, loc, msg, input}]
+    return detail.map((e) => e.msg || String(e)).join("; ");
+  }
+  return String(detail);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
   const headers = isFormData
@@ -35,8 +46,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   });
   if (!resp.ok) {
-    const detail = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new ApiError(resp.status, (detail as { detail?: string }).detail ?? resp.statusText);
+    const data = await resp.json().catch(() => ({ detail: resp.statusText }));
+    const detail = (data as { detail?: unknown }).detail ?? resp.statusText;
+    throw new ApiError(resp.status, formatErrorDetail(detail));
   }
   if (resp.status === 204) return undefined as T;
   return (await resp.json()) as T;
