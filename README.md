@@ -90,6 +90,7 @@ dayu-cli init
 3. 输入对应 API Key 并永久写入环境变量（macOS/Linux 写 shell profile，Windows 用 setx）
 4. 自动更新 manifest 中的默认模型为你选择的供应商模型
 5. 可选配置联网检索 API Key（TAVILY / SERPER / FMP）
+6. 自动检测 HuggingFace Hub 连通性，可选配置镜像加速（`hf-mirror.com`）
 
 可选参数：
 

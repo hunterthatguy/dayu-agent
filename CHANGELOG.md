@@ -24,6 +24,7 @@
 - 新 Repository：`PromptDocumentRepository`（prompt 文件系统访问）
 - Web 路由测试：`test_web_routes_portfolio.py`、`test_web_routes_config.py`、`test_web_routes_upload.py`
 - 可选依赖 `[web]`：uvicorn + python-multipart（文件上传支持）
+- `dayu-cli init` 支持 hg（Mercurial）镜像仓库配置（#9 from main）
 
 ### 修复
 
@@ -36,6 +37,7 @@
 - Sidebar 导航高亮：Config 子路由匹配逻辑，添加 `matchPath` 函数
 - Tailwind CSS PostCSS 错误：`@import "tailwindcss"` 改为标准 `@tailwind` 指令
 - Web 路由测试：简化为验证路由注册而非 handler 行为，避免 monkeypatch 问题
+- 安装链接更新：v0.1.0 → v0.1.1 wheel 地址（#8 from main）
 
 ## [0.1.0] - 2026-04-17
 
