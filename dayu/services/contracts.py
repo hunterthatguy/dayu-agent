@@ -804,6 +804,7 @@ class ApiKeyStatusView:
         display_name: 显示名称。
         is_configured: 是否已配置。
         source: 配置来源（file/env/空）。
+        masked_value: 打码后的 key 值（如 `sk-****abc`），未配置时为空。
         url: 申请地址。
     """
 
@@ -811,6 +812,7 @@ class ApiKeyStatusView:
     display_name: str
     is_configured: bool
     source: str
+    masked_value: str
     url: str
 
 

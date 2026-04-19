@@ -165,6 +165,11 @@ function ApiKeyCard({
           <div className="text-sm text-zinc-500 mt-1">
             来源: {data.source === "env" ? "环境变量" : data.source === "file" ? "本地文件" : "未设置"}
           </div>
+          {data.is_configured && data.masked_value && (
+            <div className="text-sm text-zinc-400 mt-1 font-mono">
+              {data.masked_value}
+            </div>
+          )}
         </div>
 
         {!isEditing && (

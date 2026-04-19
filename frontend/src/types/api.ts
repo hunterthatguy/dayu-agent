@@ -226,6 +226,7 @@ export interface ApiKeyStatusResponse {
   display_name: string;
   is_configured: boolean;
   source: string;
+  masked_value: string;
   url: string;
 }
 

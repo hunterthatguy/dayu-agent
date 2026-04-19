@@ -30,6 +30,7 @@ class ApiKeyStatusResponse(BaseModel):
     display_name: str
     is_configured: bool
     source: str
+    masked_value: str
     url: str
 
 
@@ -69,6 +70,7 @@ def _key_status_to_response(view: ApiKeyStatusView) -> ApiKeyStatusResponse:
         display_name=view.display_name,
         is_configured=view.is_configured,
         source=view.source,
+        masked_value=view.masked_value,
         url=view.url,
     )
 

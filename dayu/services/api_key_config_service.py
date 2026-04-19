@@ -18,6 +18,31 @@ from dayu.services.contracts import ApiKeyStatusView, ModelApiKeyRequirementView
 
 _API_KEY_FILE_NAME = "api_keys.json"
 
+# 打码配置：显示前缀长度和后缀长度
+_MASK_PREFIX_LEN = 4
+_MASK_SUFFIX_LEN = 4
+_MASK_MIN_LENGTH = 10  # key 长度小于此值时只显示 ****
+
+
+def _mask_api_key(value: str) -> str:
+    """生成打码后的 API key 显示值。
+
+    规则：
+    - 长度 < 10：只显示 `****`
+    - 长度 >= 10：显示前4位 + `****` + 后4位
+
+    Args:
+        value: 完整 API key 值。
+
+    Returns:
+        打码后的显示值。
+    """
+    if not value:
+        return ""
+    if len(value) < _MASK_MIN_LENGTH:
+        return "****"
+    return f"{value[:_MASK_PREFIX_LEN]}****{value[-_MASK_SUFFIX_LEN:]}"
+
 # 用户可配置的 API key 列表（按需求）
 _CONFIGURABLE_KEYS: list[str] = [
     "MIMO_PLAN_API_KEY",
@@ -112,6 +137,7 @@ class ApiKeyConfigService:
                     display_name=_KEY_DISPLAY_NAMES.get(key_name, key_name),
                     is_configured=True,
                     source="file",
+                    masked_value=_mask_api_key(file_value),
                     url=_KEY_URLS.get(key_name, ""),
                 ))
             elif env_value:
@@ -121,6 +147,7 @@ class ApiKeyConfigService:
                     display_name=_KEY_DISPLAY_NAMES.get(key_name, key_name),
                     is_configured=True,
                     source="env",
+                    masked_value=_mask_api_key(env_value),
                     url=_KEY_URLS.get(key_name, ""),
                 ))
             else:
@@ -130,6 +157,7 @@ class ApiKeyConfigService:
                     display_name=_KEY_DISPLAY_NAMES.get(key_name, key_name),
                     is_configured=False,
                     source="",
+                    masked_value="",
                     url=_KEY_URLS.get(key_name, ""),
                 ))
         return result
