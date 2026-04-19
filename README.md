@@ -558,7 +558,7 @@ dayu-cli web --verbose
 - 启动后访问 `http://localhost:9000`（或指定端口）进入 Web UI。
 - Web UI 提供：
   - Portfolio 浏览：查看公司列表、Filing 详情、已处理状态
-  - 财报上传：手动上传单份财报并实时查看处理进度
+  - 财报上传（Upload）：支持从 SEC 下载或上传本地财报；实时进度可视化（阶段预显示 + 进度计数）
   - Scene 配置：矩阵视图查看/编辑 Scene 与 Prompt 组合；模型切换需先配置对应 API Key
   - Prompt 控制台：文件树浏览 Prompt 资产
   - API Keys 配置：配置各服务 API Key，支持 Mimo / DeepSeek / FMP / Tavily / Serper；配置后自动启用对应模型
@@ -566,6 +566,10 @@ dayu-cli web --verbose
   1. `dayu-cli web` 启动后端 API
   2. `cd frontend && npm run dev` 启动前端开发服务器
 - 前端开发服务器默认 `http://localhost:5175`，会自动代理 API 到后端。
+- Upload 进度可视化说明：
+  - 点击「开始下载」后立即显示 4 阶段进度框架（解析 ticker / 下载财报 / 解析与抽取 / 维度分析）
+  - 下载阶段显示进度计数（如 "下载 filing (2/5): fil_xxx"）
+  - 进度条实时更新百分比，正在进行的阶段有动画效果
 - API Key 配置说明：
   - 导航到「API Keys」页面可查看各 API Key 配置状态
   - 支持 MIMO_PLAN_API_KEY、MIMO_API_KEY、DEEPSEEK_API_KEY、FMP_API_KEY、TAVILY_API_KEY、SERPER_API_KEY
