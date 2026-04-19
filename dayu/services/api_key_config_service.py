@@ -75,14 +75,26 @@ _KEY_URLS: dict[str, str] = {
 
 # 模型 → 所需 API key 映射（从 llm_models.json 提取）
 _MODEL_API_KEY_MAP: dict[str, str] = {
-    "mimo-v2-pro-plan": "MIMO_PLAN_API_KEY",
-    "mimo-v2-pro-thinking-plan": "MIMO_PLAN_API_KEY",
+    # Mimo Token Plan 模型（需要 MIMO_PLAN_API_KEY）
+    "mimo-v2-plan": "MIMO_PLAN_API_KEY",
+    "mimo-v2-plan-thinking": "MIMO_PLAN_API_KEY",
+    # Mimo 普通模型（需要 MIMO_API_KEY）
     "mimo-v2-pro": "MIMO_API_KEY",
     "mimo-v2-pro-thinking": "MIMO_API_KEY",
     "mimo-v2-flash": "MIMO_API_KEY",
     "mimo-v2-flash-thinking": "MIMO_API_KEY",
+    # DeepSeek 模型
     "deepseek-chat": "DEEPSEEK_API_KEY",
     "deepseek-thinking": "DEEPSEEK_API_KEY",
+    # Qwen 模型（需要 QWEN_API_KEY，暂不支持 WebUI 配置）
+    "qwen3": "QWEN_API_KEY",
+    "qwen3-thinking": "QWEN_API_KEY",
+    "qwen3:30b-thinking": "QWEN_API_KEY",
+    # 其他模型（需要对应 API Key，暂不支持 WebUI 配置）
+    "gpt-5.4": "OPENAI_API_KEY",
+    "claude-sonnet-4-6": "ANTHROPIC_API_KEY",
+    "gemini-2.5-flash": "GEMINI_API_KEY",
+    "glm-5": "GLM_API_KEY",
 }
 
 

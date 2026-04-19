@@ -17,10 +17,15 @@ export default function SceneMatrixPage() {
     queryFn: api.config.getSceneMatrix,
   });
 
-  const { data: modelRequirements } = useQuery({
+  const { data: modelRequirements, isLoading: reqLoading, error: reqError } = useQuery({
     queryKey: ["model-requirements"],
     queryFn: api.settings.listModelRequirements,
   });
+
+  // 调试：打印获取到的数据
+  console.log("matrix:", matrix);
+  console.log("matrix.all_models:", matrix?.all_models);
+  console.log("modelRequirements:", modelRequirements);
 
   const updateMutation = useMutation({
     mutationFn: ({ sceneName, modelName }: { sceneName: string; modelName: string }) =>
@@ -114,6 +119,18 @@ export default function SceneMatrixPage() {
           点击可选模型切换默认模型（需先配置 API Key）
         </div>
       </div>
+
+      {reqError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+          模型可用性加载失败，模型选择功能可能不可用
+        </div>
+      )}
+
+      {reqLoading && (
+        <div className="mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded-md text-sm text-zinc-600">
+          正在加载模型可用性状态...
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-600">
